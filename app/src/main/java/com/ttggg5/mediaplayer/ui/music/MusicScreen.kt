@@ -31,6 +31,7 @@ import androidx.compose.material.icons.rounded.LibraryMusic
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -73,6 +74,7 @@ fun MusicScreen(
     onOpenAlbum: (Long) -> Unit,
     onOpenArtist: (String) -> Unit,
     onOpenFolder: (String) -> Unit,
+    onOpenSettings: () -> Unit,
 ) {
     val query by vm.musicQuery.collectAsStateWithLifecycle()
     val sort by vm.songSort.collectAsStateWithLifecycle()
@@ -96,6 +98,7 @@ fun MusicScreen(
                     onChange = { field, asc -> vm.setSongSort(SortSetting(field, asc)) },
                 )
                 IconButton(onClick = vm::refresh) { Icon(Icons.Rounded.Refresh, "Rescan") }
+                IconButton(onClick = onOpenSettings) { Icon(Icons.Rounded.Settings, "Settings") }
             }
         },
     ) { padding ->

@@ -2,6 +2,7 @@ name: Android CI
 
 on:
   push:
+    branches: ['**']
   pull_request:
 
 jobs:
@@ -17,6 +18,9 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
 
+      - name: Unit tests
+        run: ./gradlew testDebugUnitTest
+
       - name: Build debug APK
         run: ./gradlew assembleDebug --stacktrace
 
@@ -24,6 +28,32 @@ jobs:
         with:
           name: media-player-debug
           path: app/build/outputs/apk/debug/*.apk
+
+      - name: Decode release keystore
+        id: keystore
+        env:
+          SIGNING_KEYSTORE_BASE64: ${{ secrets.SIGNING_KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$SIGNING_KEYSTORE_BASE64" ]; then
+            echo "$SIGNING_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
+            echo "path=$RUNNER_TEMP/release.jks" >> "$GITHUB_OUTPUT"
+          else
+            echo "No signing secrets configured; the release APK will be unsigned."
+          fi
+
+      - name: Build release APK
+        env:
+          SIGNING_KEYSTORE_PATH: ${{ steps.keystore.outputs.path }}
+          SIGNING_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
+          SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
+          SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
+        run: ./gradlew assembleRelease --stacktrace
+
+      - uses: actions/upload-artifact@v4
+        if: steps.keystore.outputs.path != ''
+        with:
+          name: media-player-release
+          path: app/build/outputs/apk/release/*.apk
 
       - name: Lint
         run: ./gradlew lintDebug

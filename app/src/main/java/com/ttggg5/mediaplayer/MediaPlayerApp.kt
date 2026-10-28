@@ -9,6 +9,7 @@ import com.ttggg5.mediaplayer.data.playlist.AppDatabase
 import com.ttggg5.mediaplayer.data.playlist.PlaylistRepository
 import com.ttggg5.mediaplayer.data.settings.SettingsRepository
 import com.ttggg5.mediaplayer.playback.MusicController
+import com.ttggg5.mediaplayer.update.UpdateManager
 
 class MediaPlayerApp : Application(), ImageLoaderFactory {
 
@@ -33,4 +34,5 @@ class AppContainer(app: Application) {
     val playlistRepository = PlaylistRepository(AppDatabase.create(app).playlistDao())
     val settingsRepository = SettingsRepository(app)
     val musicController by lazy { MusicController(app) }
+    val updateManager = UpdateManager(app)
 }

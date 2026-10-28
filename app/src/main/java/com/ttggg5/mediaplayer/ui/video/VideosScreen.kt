@@ -21,6 +21,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Movie
 import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.VideoLibrary
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
@@ -51,7 +52,7 @@ import com.ttggg5.mediaplayer.ui.components.formatDuration
 import com.ttggg5.mediaplayer.ui.components.formatSize
 
 @Composable
-fun VideosScreen(vm: LibraryViewModel) {
+fun VideosScreen(vm: LibraryViewModel, onOpenSettings: () -> Unit) {
     val context = LocalContext.current
     val videos by vm.videos.collectAsStateWithLifecycle()
     val folders by vm.videoFolders.collectAsStateWithLifecycle()
@@ -71,6 +72,7 @@ fun VideosScreen(vm: LibraryViewModel) {
                     onChange = { field, asc -> vm.setVideoSort(SortSetting(field, asc)) },
                 )
                 IconButton(onClick = vm::refresh) { Icon(Icons.Rounded.Refresh, "Rescan") }
+                IconButton(onClick = onOpenSettings) { Icon(Icons.Rounded.Settings, "Settings") }
             }
         },
     ) { padding ->

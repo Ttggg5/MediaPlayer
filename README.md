@@ -19,6 +19,12 @@ A modern Android media player for music and video, built with Kotlin, Jetpack Co
 - Audio track and subtitle selection, playback speed, fit/crop/stretch, rotation lock
 - Picture-in-picture (enters automatically on Android 12+ when you leave while playing)
 
+**Settings & updates**
+- Theme (system/light/dark) and dynamic colors
+- Video gestures on/off, skip length, resume where you left off
+- Hide short audio clips, rescan library
+- Built-in updater: checks GitHub Releases, downloads the new APK and opens the installer
+
 **Streaming**
 - Play HTTP(S) files and HLS (`.m3u8`) and DASH (`.mpd`) streams as video or audio
 - Recent links and sample streams
@@ -44,6 +50,30 @@ Requires JDK 17+ and the Android SDK (platform 35).
 ```
 
 The APK is written to `app/build/outputs/apk/debug/`. GitHub Actions builds it on every push and uploads it as the `media-player-debug` artifact.
+
+### Release builds and signing
+
+Release APKs are signed with one fixed key so new versions install over old ones (and the in-app updater works). The key is never committed. CI reads it from these repository secrets (Settings → Secrets and variables → Actions):
+
+| Secret | Value |
+| --- | --- |
+| `SIGNING_KEYSTORE_BASE64` | The `.jks` keystore, base64-encoded |
+| `SIGNING_STORE_PASSWORD` | Keystore password |
+| `SIGNING_KEY_ALIAS` | Key alias |
+| `SIGNING_KEY_PASSWORD` | Key password |
+
+With the secrets set, every push also uploads a signed `media-player-release` artifact.
+
+To publish a release that the app's updater will offer:
+
+```bash
+git tag v1.0.1
+git push origin v1.0.1
+```
+
+The `Release` workflow builds the APK with that version and attaches it to a GitHub Release.
+
+For local release builds, create an untracked `keystore.properties` in the project root with `storeFile`, `storePassword`, `keyAlias` and `keyPassword`, then run `./gradlew assembleRelease -PappVersion=1.0.1`.
 
 ## Project layout
 

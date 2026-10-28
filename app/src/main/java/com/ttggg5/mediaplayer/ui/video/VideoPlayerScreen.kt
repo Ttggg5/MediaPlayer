@@ -28,11 +28,11 @@ import androidx.compose.material.icons.automirrored.rounded.VolumeUp
 import androidx.compose.material.icons.rounded.AspectRatio
 import androidx.compose.material.icons.rounded.Audiotrack
 import androidx.compose.material.icons.rounded.BrightnessMedium
-import androidx.compose.material.icons.rounded.Forward10
+import androidx.compose.material.icons.rounded.FastForward
+import androidx.compose.material.icons.rounded.FastRewind
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PictureInPictureAlt
 import androidx.compose.material.icons.rounded.PlayArrow
-import androidx.compose.material.icons.rounded.Replay10
 import androidx.compose.material.icons.rounded.ScreenRotation
 import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material.icons.rounded.SkipPrevious
@@ -98,7 +98,18 @@ private val Speeds = listOf(0.25f, 0.5f, 0.75f, 1f, 1.25f, 1.5f, 1.75f, 2f)
 
 @OptIn(UnstableApi::class)
 @Composable
-fun VideoPlayerScreen(player: ExoPlayer, inPictureInPicture: Boolean, host: VideoPlayerHost) {
+fun VideoPlayerScreen(
+    player: ExoPlayer,
+    inPictureInPicture: Boolean,
+    host: VideoPlayerHost,
+    gesturesEnabled: Boolean,
+    seekStepMs: Long,
+) {
+    val stepLabel = "${seekStepMs / 1000}s"
+    fun seekBy(delta: Long) {
+        val duration = player.duration.takeIf { it != C.TIME_UNSET } ?: Long.MAX_VALUE
+        player.seekTo((player.currentPosition + delta).coerceIn(0L, duration))
+    }
     var isPlaying by remember { mutableStateOf(player.isPlaying) }
     var title by remember { mutableStateOf(player.mediaMetadata.title?.toString().orEmpty()) }
     var duration by remember { mutableLongStateOf(0L) }
@@ -169,21 +180,26 @@ fun VideoPlayerScreen(player: ExoPlayer, inPictureInPicture: Boolean, host: Vide
             Box(
                 Modifier
                     .fillMaxSize()
-                    .pointerInput(player) {
-                        detectTapGestures(
-                            onTap = { controlsVisible = !controlsVisible; touch() },
-                            onDoubleTap = { offset ->
-                                if (offset.x < size.width / 2) {
-                                    player.seekBack()
-                                    indicator = GestureIndicator(Icons.Rounded.Replay10, "-10s", null)
-                                } else {
-                                    player.seekForward()
-                                    indicator = GestureIndicator(Icons.Rounded.Forward10, "+10s", null)
-                                }
-                            },
-                        )
+                    .pointerInput(player, gesturesEnabled, seekStepMs) {
+                        if (gesturesEnabled) {
+                            detectTapGestures(
+                                onTap = { controlsVisible = !controlsVisible; touch() },
+                                onDoubleTap = { offset ->
+                                    if (offset.x < size.width / 2) {
+                                        seekBy(-seekStepMs)
+                                        indicator = GestureIndicator(Icons.Rounded.FastRewind, "-$stepLabel", null)
+                                    } else {
+                                        seekBy(seekStepMs)
+                                        indicator = GestureIndicator(Icons.Rounded.FastForward, "+$stepLabel", null)
+                                    }
+                                },
+                            )
+                        } else {
+                            detectTapGestures(onTap = { controlsVisible = !controlsVisible; touch() })
+                        }
                     }
-                    .pointerInput(player) {
+                    .pointerInput(player, gesturesEnabled) {
+                        if (!gesturesEnabled) return@pointerInput
                         var mode = DragMode.NONE
                         var total = Offset.Zero
                         var startX = 0f
@@ -302,7 +318,7 @@ fun VideoPlayerScreen(player: ExoPlayer, inPictureInPicture: Boolean, host: Vide
                         ControlIcon(Icons.Rounded.SkipPrevious, "Previous", enabled = hasPrevious, size = 40) {
                             player.seekToPreviousMediaItem(); touch()
                         }
-                        ControlIcon(Icons.Rounded.Replay10, "Back 10 seconds", size = 40) { player.seekBack(); touch() }
+                        ControlIcon(Icons.Rounded.FastRewind, "Back $stepLabel", size = 40) { seekBy(-seekStepMs); touch() }
                         FilledIconButton(
                             onClick = {
                                 if (player.isPlaying) {
@@ -326,7 +342,7 @@ fun VideoPlayerScreen(player: ExoPlayer, inPictureInPicture: Boolean, host: Vide
                                 Modifier.size(44.dp),
                             )
                         }
-                        ControlIcon(Icons.Rounded.Forward10, "Forward 10 seconds", size = 40) { player.seekForward(); touch() }
+                        ControlIcon(Icons.Rounded.FastForward, "Forward $stepLabel", size = 40) { seekBy(seekStepMs); touch() }
                         ControlIcon(Icons.Rounded.SkipNext, "Next", enabled = hasNext, size = 40) {
                             player.seekToNextMediaItem(); touch()
                         }

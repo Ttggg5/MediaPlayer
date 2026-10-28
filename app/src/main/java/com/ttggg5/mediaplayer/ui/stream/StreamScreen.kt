@@ -24,6 +24,7 @@ import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Link
 import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.OndemandVideo
+import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -63,7 +64,12 @@ private val Samples = listOf(
 )
 
 @Composable
-fun StreamScreen(settings: SettingsRepository, music: MusicController, onAudioStarted: () -> Unit) {
+fun StreamScreen(
+    settings: SettingsRepository,
+    music: MusicController,
+    onAudioStarted: () -> Unit,
+    onOpenSettings: () -> Unit,
+) {
     val context = LocalContext.current
     val clipboard = LocalClipboardManager.current
     val scope = rememberCoroutineScope()
@@ -84,7 +90,15 @@ fun StreamScreen(settings: SettingsRepository, music: MusicController, onAudioSt
         }
     }
 
-    ScreenScaffold(topBar = { scroll -> TopAppBar(title = { Text("Stream") }, scrollBehavior = scroll) }) { padding ->
+    ScreenScaffold(
+        topBar = { scroll ->
+            TopAppBar(
+                title = { Text("Stream") },
+                actions = { IconButton(onClick = onOpenSettings) { Icon(Icons.Rounded.Settings, "Settings") } },
+                scrollBehavior = scroll,
+            )
+        },
+    ) { padding ->
         LazyColumn(
             Modifier.padding(padding).fillMaxSize(),
             contentPadding = PaddingValues(16.dp),

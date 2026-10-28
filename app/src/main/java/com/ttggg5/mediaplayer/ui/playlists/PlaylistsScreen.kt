@@ -17,6 +17,7 @@ import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.MoreVert
+import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -46,14 +47,20 @@ import com.ttggg5.mediaplayer.ui.components.EmptyState
 import com.ttggg5.mediaplayer.ui.components.ScreenScaffold
 
 @Composable
-fun PlaylistsScreen(vm: PlaylistsViewModel, onOpen: (Long) -> Unit) {
+fun PlaylistsScreen(vm: PlaylistsViewModel, onOpen: (Long) -> Unit, onOpenSettings: () -> Unit) {
     val playlists by vm.playlists.collectAsStateWithLifecycle()
     var creating by remember { mutableStateOf(false) }
     var renaming by remember { mutableStateOf<PlaylistSummary?>(null) }
     var deleting by remember { mutableStateOf<PlaylistSummary?>(null) }
 
     ScreenScaffold(
-        topBar = { scroll -> TopAppBar(title = { Text("Playlists") }, scrollBehavior = scroll) },
+        topBar = { scroll ->
+            TopAppBar(
+                title = { Text("Playlists") },
+                actions = { IconButton(onClick = onOpenSettings) { Icon(Icons.Rounded.Settings, "Settings") } },
+                scrollBehavior = scroll,
+            )
+        },
         floatingActionButton = {
             ExtendedFloatingActionButton(
                 onClick = { creating = true },

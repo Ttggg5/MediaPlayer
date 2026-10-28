@@ -94,6 +94,7 @@ class MediaRepository(private val context: Context) {
         val projection = arrayOf(
             MediaStore.Audio.Media._ID,
             MediaStore.Audio.Media.TITLE,
+            MediaStore.Audio.Media.DISPLAY_NAME,
             MediaStore.Audio.Media.ARTIST,
             MediaStore.Audio.Media.ALBUM,
             MediaStore.Audio.Media.ALBUM_ID,
@@ -111,6 +112,7 @@ class MediaRepository(private val context: Context) {
         )?.use { c ->
             val idCol = c.getColumnIndexOrThrow(MediaStore.Audio.Media._ID)
             val titleCol = c.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE)
+            val nameCol = c.getColumnIndexOrThrow(MediaStore.Audio.Media.DISPLAY_NAME)
             val artistCol = c.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST)
             val albumCol = c.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM)
             val albumIdCol = c.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM_ID)
@@ -124,7 +126,7 @@ class MediaRepository(private val context: Context) {
                 result += AudioTrack(
                     id = id,
                     uri = ContentUris.withAppendedId(audioCollection(), id),
-                    title = c.getString(titleCol)?.takeIf { it.isNotBlank() } ?: "Unknown",
+                    title = repairTitle(c.getString(titleCol), c.getString(nameCol)),
                     artist = c.getString(artistCol).orUnknown("Unknown artist"),
                     album = c.getString(albumCol).orUnknown("Unknown album"),
                     albumId = albumId,
@@ -190,6 +192,19 @@ class MediaRepository(private val context: Context) {
         if (this.isNullOrBlank() || this == MediaStore.UNKNOWN_STRING) fallback else this
 
     companion object {
+        /**
+         * Tag editors that write legacy encodings replace emoji and symbols with a literal "?".
+         * When the tag title looks like such a lossy copy of the file name, use the file name.
+         */
+        internal fun repairTitle(title: String?, displayName: String?): String {
+            val fileTitle = displayName?.substringBeforeLast('.')?.takeIf { it.isNotBlank() }
+            if (title.isNullOrBlank()) return fileTitle ?: "Unknown"
+            if (fileTitle == null || '?' !in title || '?' in fileTitle) return title
+            // Each "?" stands for one lost character, which may be a surrogate pair (2 chars).
+            val pattern = title.split('?').joinToString(".{1,2}") { Regex.escape(it) }
+            return if (Regex(pattern).matches(fileTitle)) fileTitle else title
+        }
+
         private val ALBUM_ART_URI: Uri = Uri.parse("content://media/external/audio/albumart")
     }
 }

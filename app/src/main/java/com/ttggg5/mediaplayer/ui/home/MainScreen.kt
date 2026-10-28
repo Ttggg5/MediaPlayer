@@ -63,6 +63,8 @@ import com.ttggg5.mediaplayer.ui.playlists.NameDialog
 import com.ttggg5.mediaplayer.ui.playlists.PlaylistDetail
 import com.ttggg5.mediaplayer.ui.playlists.PlaylistsScreen
 import com.ttggg5.mediaplayer.ui.playlists.PlaylistsViewModel
+import com.ttggg5.mediaplayer.ui.settings.SettingsScreen
+import com.ttggg5.mediaplayer.ui.settings.UpdateDialog
 import com.ttggg5.mediaplayer.ui.stream.StreamScreen
 import com.ttggg5.mediaplayer.ui.video.VideosScreen
 
@@ -86,6 +88,14 @@ fun MainScreen(container: AppContainer, openNowPlayingRequests: Int) {
 
     var nowPlayingOpen by rememberSaveable { mutableStateOf(false) }
     var addToPlaylist by remember { mutableStateOf<List<AudioTrack>?>(null) }
+
+    val updateState by container.updateManager.state.collectAsStateWithLifecycle()
+    LaunchedEffect(Unit) {
+        if (container.settingsRepository.currentSettings().autoCheckUpdates) {
+            container.updateManager.check(quiet = true)
+        }
+    }
+    val openSettings = { nav.navigate("settings") { launchSingleTop = true } }
 
     LaunchedEffect(openNowPlayingRequests) {
         if (openNowPlayingRequests > 0) nowPlayingOpen = true
@@ -129,12 +139,21 @@ fun MainScreen(container: AppContainer, openNowPlayingRequests: Int) {
                         onOpenAlbum = { nav.navigate("album/$it") },
                         onOpenArtist = { nav.navigate("artist/${Uri.encode(it)}") },
                         onOpenFolder = { nav.navigate("folder/${Uri.encode(it)}") },
+                        onOpenSettings = openSettings,
                     )
                 }
-                composable("videos") { VideosScreen(library) }
-                composable("playlists") { PlaylistsScreen(playlists, onOpen = { nav.navigate("playlist/$it") }) }
+                composable("videos") { VideosScreen(library, onOpenSettings = openSettings) }
+                composable("playlists") {
+                    PlaylistsScreen(playlists, onOpen = { nav.navigate("playlist/$it") }, onOpenSettings = openSettings)
+                }
+                composable("settings") { SettingsScreen(container, onBack = { nav.popBackStack() }) }
                 composable("stream") {
-                    StreamScreen(container.settingsRepository, music, onAudioStarted = { nowPlayingOpen = true })
+                    StreamScreen(
+                        container.settingsRepository,
+                        music,
+                        onAudioStarted = { nowPlayingOpen = true },
+                        onOpenSettings = openSettings,
+                    )
                 }
                 composable("album/{id}", arguments = listOf(navArgument("id") { type = NavType.LongType })) { entry ->
                     val id = entry.arguments?.getLong("id") ?: 0L
@@ -153,7 +172,7 @@ fun MainScreen(container: AppContainer, openNowPlayingRequests: Int) {
                     )
                 }
                 composable("artist/{name}") { entry ->
-                    val name = entry.arguments?.getString("name")?.let(Uri::decode).orEmpty()
+                    val name = entry.arguments?.getString("name").orEmpty()
                     val songs by library.allSongs.collectAsStateWithLifecycle()
                     val tracks = remember(songs, name) { library.artist(name) }
                     TrackCollectionScreen(
@@ -168,7 +187,7 @@ fun MainScreen(container: AppContainer, openNowPlayingRequests: Int) {
                     )
                 }
                 composable("folder/{path}") { entry ->
-                    val path = entry.arguments?.getString("path")?.let(Uri::decode).orEmpty()
+                    val path = entry.arguments?.getString("path").orEmpty()
                     val songs by library.allSongs.collectAsStateWithLifecycle()
                     val tracks = remember(songs, path) { library.folder(path) }
                     TrackCollectionScreen(
@@ -199,6 +218,8 @@ fun MainScreen(container: AppContainer, openNowPlayingRequests: Int) {
     }
 
     BackHandler(enabled = nowPlayingOpen && musicState.currentItem != null) { nowPlayingOpen = false }
+
+    UpdateDialog(updateState, container.updateManager)
 
     addToPlaylist?.let { tracks ->
         AddToPlaylistDialog(playlists, tracks, onDismiss = { addToPlaylist = null })
@@ -262,6 +283,7 @@ private fun BottomBar(nav: NavHostController) {
     val selectedTab = when {
         currentRoute == null -> "music"
         currentRoute.startsWith("playlist/") -> "playlists"
+        currentRoute == "settings" -> ""
         currentRoute.contains("/") -> "music"
         else -> currentRoute
     }

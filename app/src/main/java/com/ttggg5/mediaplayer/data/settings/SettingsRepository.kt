@@ -4,16 +4,36 @@ import android.content.Context
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.ttggg5.mediaplayer.data.media.SongSort
 import com.ttggg5.mediaplayer.data.media.VideoSort
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 
 private val Context.dataStore by preferencesDataStore(name = "settings")
 
 data class SortSetting<T>(val field: T, val ascending: Boolean)
+
+enum class ThemeMode(val label: String) { SYSTEM("System default"), LIGHT("Light"), DARK("Dark") }
+
+data class AppSettings(
+    val themeMode: ThemeMode = ThemeMode.SYSTEM,
+    val dynamicColor: Boolean = true,
+    val videoGestures: Boolean = true,
+    val seekStepSeconds: Int = 10,
+    val resumeVideos: Boolean = true,
+    val hideShortAudio: Boolean = false,
+    val autoCheckUpdates: Boolean = true,
+) {
+    companion object {
+        val SeekSteps = listOf(5, 10, 15, 30)
+        const val SHORT_AUDIO_MS = 30_000L
+    }
+}
 
 class SettingsRepository(private val context: Context) {
 
@@ -30,6 +50,38 @@ class SettingsRepository(private val context: Context) {
             prefs[VIDEO_ASC] ?: false,
         )
     }
+
+    val appSettings: Flow<AppSettings> = context.dataStore.data.map { prefs ->
+        AppSettings(
+            themeMode = prefs[THEME_MODE]?.let { runCatching { ThemeMode.valueOf(it) }.getOrNull() } ?: ThemeMode.SYSTEM,
+            dynamicColor = prefs[DYNAMIC_COLOR] ?: true,
+            videoGestures = prefs[VIDEO_GESTURES] ?: true,
+            seekStepSeconds = prefs[SEEK_STEP] ?: 10,
+            resumeVideos = prefs[RESUME_VIDEOS] ?: true,
+            hideShortAudio = prefs[HIDE_SHORT_AUDIO] ?: false,
+            autoCheckUpdates = prefs[AUTO_CHECK_UPDATES] ?: true,
+        )
+    }
+
+    suspend fun currentSettings(): AppSettings = appSettings.first()
+
+    suspend fun setThemeMode(mode: ThemeMode) = context.dataStore.edit { it[THEME_MODE] = mode.name }
+    suspend fun setDynamicColor(enabled: Boolean) = context.dataStore.edit { it[DYNAMIC_COLOR] = enabled }
+    suspend fun setVideoGestures(enabled: Boolean) = context.dataStore.edit { it[VIDEO_GESTURES] = enabled }
+    suspend fun setSeekStepSeconds(seconds: Int) = context.dataStore.edit { it[SEEK_STEP] = seconds }
+    suspend fun setResumeVideos(enabled: Boolean) = context.dataStore.edit { it[RESUME_VIDEOS] = enabled }
+    suspend fun setHideShortAudio(enabled: Boolean) = context.dataStore.edit { it[HIDE_SHORT_AUDIO] = enabled }
+    suspend fun setAutoCheckUpdates(enabled: Boolean) = context.dataStore.edit { it[AUTO_CHECK_UPDATES] = enabled }
+
+    /** Saved resume position for a video, or 0 if none. */
+    suspend fun videoPosition(uri: String): Long =
+        context.dataStore.data.first()[positionKey(uri)] ?: 0L
+
+    suspend fun saveVideoPosition(uri: String, positionMs: Long) = context.dataStore.edit {
+        if (positionMs > 0) it[positionKey(uri)] = positionMs else it.remove(positionKey(uri))
+    }
+
+    private fun positionKey(uri: String) = longPreferencesKey("video_pos_${uri.hashCode()}")
 
     val recentStreams: Flow<List<String>> = context.dataStore.data.map { prefs ->
         prefs[RECENT_STREAMS]?.split('\n')?.filter { it.isNotBlank() }.orEmpty()
@@ -62,5 +114,12 @@ class SettingsRepository(private val context: Context) {
         val VIDEO_SORT = stringPreferencesKey("video_sort")
         val VIDEO_ASC = booleanPreferencesKey("video_sort_asc")
         val RECENT_STREAMS: Preferences.Key<String> = stringPreferencesKey("recent_streams")
+        val THEME_MODE = stringPreferencesKey("theme_mode")
+        val DYNAMIC_COLOR = booleanPreferencesKey("dynamic_color")
+        val VIDEO_GESTURES = booleanPreferencesKey("video_gestures")
+        val SEEK_STEP = intPreferencesKey("seek_step_seconds")
+        val RESUME_VIDEOS = booleanPreferencesKey("resume_videos")
+        val HIDE_SHORT_AUDIO = booleanPreferencesKey("hide_short_audio")
+        val AUTO_CHECK_UPDATES = booleanPreferencesKey("auto_check_updates")
     }
 }

@@ -15,7 +15,12 @@ import android.provider.Settings
 import android.util.Rational
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -26,7 +31,14 @@ import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
 import androidx.media3.common.VideoSize
 import androidx.media3.exoplayer.ExoPlayer
+import com.ttggg5.mediaplayer.MediaPlayerApp
+import com.ttggg5.mediaplayer.data.settings.AppSettings
 import com.ttggg5.mediaplayer.ui.theme.MediaPlayerTheme
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 /**
  * Full-screen video player. Runs in its own task so it can shrink to picture-in-picture
@@ -37,6 +49,14 @@ class VideoPlayerActivity : ComponentActivity(), VideoPlayerHost {
     private lateinit var player: ExoPlayer
     private val inPictureInPicture = mutableStateOf(false)
     private var orientationChosen = false
+
+    private val settings by lazy { (application as MediaPlayerApp).container.settingsRepository }
+
+    /** Position writes outlive the activity so the last one in onStop/onDestroy is not lost. */
+    private val ioScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    /** URI of the item currently loaded, used to remember where each video was left off. */
+    private var currentUri: String? = null
 
     private val audioManager by lazy { getSystemService(Context.AUDIO_SERVICE) as AudioManager }
 
@@ -58,11 +78,18 @@ class VideoPlayerActivity : ComponentActivity(), VideoPlayerHost {
                 /* handleAudioFocus = */ true,
             )
             .setHandleAudioBecomingNoisy(true)
-            .setSeekBackIncrementMs(SEEK_STEP_MS)
-            .setSeekForwardIncrementMs(SEEK_STEP_MS)
             .build()
         player.addListener(object : Player.Listener {
             override fun onIsPlayingChanged(isPlaying: Boolean) = updatePipParams()
+
+            override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+                val previous = currentUri
+                // The previous video played to the end: forget its position.
+                if (previous != null && reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO) {
+                    ioScope.launch { settings.saveVideoPosition(previous, 0L) }
+                }
+                currentUri = mediaItem?.localConfiguration?.uri?.toString()
+            }
 
             override fun onVideoSizeChanged(videoSize: VideoSize) {
                 updatePipParams()
@@ -78,15 +105,42 @@ class VideoPlayerActivity : ComponentActivity(), VideoPlayerHost {
         })
         load(intent)
 
+        // Save the position regularly so it survives the process being killed.
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                while (true) {
+                    delay(5_000)
+                    if (player.isPlaying) savePosition()
+                }
+            }
+        }
+
         setContent {
-            MediaPlayerTheme(darkTheme = true) {
-                VideoPlayerScreen(player = player, inPictureInPicture = inPictureInPicture.value, host = this)
+            val appSettings by settings.appSettings.collectAsStateWithLifecycle(initialValue = AppSettings())
+            MediaPlayerTheme(darkTheme = true, dynamicColor = appSettings.dynamicColor) {
+                VideoPlayerScreen(
+                    player = player,
+                    inPictureInPicture = inPictureInPicture.value,
+                    host = this,
+                    gesturesEnabled = appSettings.videoGestures,
+                    seekStepMs = appSettings.seekStepSeconds * 1_000L,
+                )
             }
         }
     }
 
+    private fun savePosition() {
+        val uri = currentUri ?: return
+        val position = player.currentPosition
+        val duration = player.duration
+        val nearEnd = duration > 0 && duration - position < RESUME_END_MARGIN_MS
+        val value = if (nearEnd || position < RESUME_MIN_MS) 0L else position
+        ioScope.launch { settings.saveVideoPosition(uri, value) }
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        savePosition()
         setIntent(intent)
         orientationChosen = false
         load(intent)
@@ -105,9 +159,17 @@ class VideoPlayerActivity : ComponentActivity(), VideoPlayerHost {
             items = listOf(mediaItem(data, intent.getStringExtra(EXTRA_SINGLE_TITLE) ?: displayName(data)))
             start = 0
         }
+        val startUri = items[start].localConfiguration?.uri?.toString()
+        currentUri = startUri
         player.setMediaItems(items, start, 0L)
         player.prepare()
         player.play()
+        if (startUri == null) return
+        lifecycleScope.launch {
+            if (!settings.currentSettings().resumeVideos) return@launch
+            val saved = settings.videoPosition(startUri)
+            if (saved > 0 && currentUri == startUri) player.seekTo(saved)
+        }
     }
 
     private fun mediaItem(uri: Uri, title: String?): MediaItem =
@@ -174,6 +236,7 @@ class VideoPlayerActivity : ComponentActivity(), VideoPlayerHost {
 
     override fun onStop() {
         super.onStop()
+        savePosition()
         player.pause()
     }
 
@@ -226,7 +289,8 @@ class VideoPlayerActivity : ComponentActivity(), VideoPlayerHost {
         private const val EXTRA_TITLES = "titles"
         private const val EXTRA_INDEX = "index"
         private const val EXTRA_SINGLE_TITLE = "title"
-        private const val SEEK_STEP_MS = 10_000L
+        private const val RESUME_END_MARGIN_MS = 5_000L
+        private const val RESUME_MIN_MS = 3_000L
         private const val MAX_PIP_RATIO = 2.39f
 
         fun start(context: Context, uris: List<Uri>, titles: List<String>, index: Int) {

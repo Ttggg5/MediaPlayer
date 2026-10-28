@@ -16,6 +16,7 @@ import com.ttggg5.mediaplayer.data.media.sortVideos
 import com.ttggg5.mediaplayer.data.media.toAlbums
 import com.ttggg5.mediaplayer.data.media.toArtists
 import com.ttggg5.mediaplayer.data.media.toFolders
+import com.ttggg5.mediaplayer.data.settings.AppSettings
 import com.ttggg5.mediaplayer.data.settings.SortSetting
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -49,9 +50,12 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
     val videoSort: StateFlow<SortSetting<VideoSort>> =
         settings.videoSort.stateIn(viewModelScope, SharingStarted.Eagerly, SortSetting(VideoSort.DATE_ADDED, false))
 
+    private val hideShortAudio = settings.appSettings.map { it.hideShortAudio }
+
     val songs: StateFlow<List<AudioTrack>> =
-        combine(media.songs, _musicQuery, songSort) { all, query, sort ->
-            all.filter { it.matches(query) }.sortSongs(sort.field, sort.ascending)
+        combine(media.songs, _musicQuery, songSort, hideShortAudio) { all, query, sort, hideShort ->
+            all.filter { it.matches(query) && (!hideShort || it.durationMs >= AppSettings.SHORT_AUDIO_MS) }
+                .sortSongs(sort.field, sort.ascending)
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     val albums: StateFlow<List<Album>> = songs.map { it.toAlbums() }
