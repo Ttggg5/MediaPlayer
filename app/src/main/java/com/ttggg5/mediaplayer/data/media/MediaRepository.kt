@@ -13,7 +13,9 @@ import android.provider.DocumentsContract
 import android.provider.MediaStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -33,7 +35,8 @@ import java.io.File
 class MediaRepository(private val context: Context, private val settings: SettingsRepository) {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
-    private val scanner = FolderScanner(context)
+    private val metadataCache = MetadataCache(context)
+    private val scanner = FolderScanner(context, metadataCache)
 
     private val _songs = MutableStateFlow<List<AudioTrack>>(emptyList())
     private val _videos = MutableStateFlow<List<VideoItem>>(emptyList())
@@ -70,7 +73,7 @@ class MediaRepository(private val context: Context, private val settings: Settin
                 .collect { (music, video) ->
                     musicTrees = music
                     videoTrees = video
-                    scanFolders()
+                    startFolderScan()
                 }
         }
     }
@@ -85,11 +88,24 @@ class MediaRepository(private val context: Context, private val settings: Settin
     private fun treesOf(entries: Set<String>): Set<Uri> =
         entries.filter { it.startsWith("content://") }.map(Uri::parse).toSet()
 
-    private suspend fun scanFolders() {
+    private var scanJob: Job? = null
+
+    /** (Re)scans the chosen folders; results appear in stages while tags are read. */
+    private fun startFolderScan() {
+        scanJob?.cancel()
         val music = musicTrees
         val video = videoTrees
-        _scannedSongs.value = withContext(Dispatchers.IO) { runCatching { scanner.scanAudio(music) }.getOrDefault(emptyList()) }
-        _scannedVideos.value = withContext(Dispatchers.IO) { runCatching { scanner.scanVideos(video) }.getOrDefault(emptyList()) }
+        scanJob = scope.launch {
+            _scanning.value = true
+            try {
+                coroutineScope {
+                    launch { runCatching { scanner.scanAudio(music) { _scannedSongs.value = it } } }
+                    launch { runCatching { scanner.scanVideos(video) { _scannedVideos.value = it } } }
+                }
+            } finally {
+                _scanning.value = false
+            }
+        }
     }
 
     private fun mergeSongs(indexed: List<AudioTrack>, scanned: List<AudioTrack>): List<AudioTrack> {
@@ -120,27 +136,57 @@ class MediaRepository(private val context: Context, private val settings: Settin
     fun inFolders(location: String, filePath: String, folders: Set<String>): Boolean =
         isInFolders(location, filePath, folders, volumeRoots)
 
-    private val _isLoading = MutableStateFlow(false)
-    val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
+    private val _indexing = MutableStateFlow(false)
+    private val _scanning = MutableStateFlow(false)
+
+    /** True while MediaStore is queried or chosen folders are being scanned. */
+    val isLoading: StateFlow<Boolean> =
+        combine(_indexing, _scanning) { indexing, scanning -> indexing || scanning }
+            .stateIn(scope, SharingStarted.Eagerly, false)
 
     private var observerRegistered = false
+    private var loadedOnce = false
+    private var indexJob: Job? = null
+    private val handler = Handler(Looper.getMainLooper())
+    private val debouncedIndex = Runnable { reloadIndex() }
 
-    private val observer = object : ContentObserver(Handler(Looper.getMainLooper())) {
+    private val observer = object : ContentObserver(handler) {
         override fun onChange(selfChange: Boolean) {
-            refresh()
+            // MediaStore sends bursts of changes (e.g. while files are copied); reload once they settle.
+            handler.removeCallbacks(debouncedIndex)
+            handler.postDelayed(debouncedIndex, INDEX_DEBOUNCE_MS)
         }
     }
 
+    /** Loads the library the first time it is needed; later calls do nothing. */
+    fun refreshIfNeeded() {
+        if (!loadedOnce) reloadIndex()
+    }
+
+    /** Full rescan, as requested by the user: MediaStore and all chosen folders. */
     fun refresh() {
+        reloadIndex()
+        startFolderScan()
+    }
+
+    private fun reloadIndex() {
+        loadedOnce = true
         registerObserver()
-        scope.launch {
-            _isLoading.value = true
-            val songs = withContext(Dispatchers.IO) { runCatching { queryAudio() }.getOrDefault(emptyList()) }
-            val videos = withContext(Dispatchers.IO) { runCatching { queryVideos() }.getOrDefault(emptyList()) }
-            _songs.value = songs
-            _videos.value = videos
-            scanFolders()
-            _isLoading.value = false
+        indexJob?.cancel()
+        indexJob = scope.launch {
+            _indexing.value = true
+            try {
+                val (songs, videos) = withContext(Dispatchers.IO) {
+                    val songs = runCatching { queryAudio() }.getOrDefault(emptyList())
+                    val videos = runCatching { queryVideos() }.getOrDefault(emptyList())
+                    metadataCache.save()
+                    songs to videos
+                }
+                _songs.value = songs
+                _videos.value = videos
+            } finally {
+                _indexing.value = false
+            }
         }
     }
 
@@ -222,6 +268,7 @@ class MediaRepository(private val context: Context, private val settings: Settin
             MediaStore.Audio.Media.ALBUM_ID,
             MediaStore.Audio.Media.DURATION,
             MediaStore.Audio.Media.DATE_ADDED,
+            MediaStore.Audio.Media.DATE_MODIFIED,
         ) + locationColumns
         val result = mutableListOf<AudioTrack>()
         context.contentResolver.query(
@@ -239,6 +286,7 @@ class MediaRepository(private val context: Context, private val settings: Settin
             val albumIdCol = c.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM_ID)
             val durationCol = c.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
             val dateCol = c.getColumnIndexOrThrow(MediaStore.Audio.Media.DATE_ADDED)
+            val modifiedCol = c.getColumnIndexOrThrow(MediaStore.Audio.Media.DATE_MODIFIED)
             val folderCol = c.getColumnIndexOrThrow(folderColumn)
             while (c.moveToNext()) {
                 val id = c.getLong(idCol)
@@ -250,7 +298,7 @@ class MediaRepository(private val context: Context, private val settings: Settin
                 var album = c.getString(albumCol)
                 // Some OEM scanners store non-ASCII tag text as "?": read the tags from the file instead.
                 if (listOf(title, artist, album).any { it?.contains('?') == true }) {
-                    readTags(uri)?.let { tags ->
+                    readTags(uri, "ms:$uri@${c.getLong(modifiedCol)}").let { tags ->
                         title = tags.title.cleanOr(title)
                         artist = tags.artist.cleanOr(artist)
                         album = tags.album.cleanOr(album)
@@ -264,7 +312,7 @@ class MediaRepository(private val context: Context, private val settings: Settin
                     album = album.orUnknown("Unknown album"),
                     albumId = albumId,
                     durationMs = c.getLong(durationCol),
-                    artworkUri = ContentUris.withAppendedId(ALBUM_ART_URI, albumId),
+                    artworkUri = artworkUriFor(uri),
                     folderPath = folderPath,
                     folderName = folderName,
                     dateAdded = c.getLong(dateCol),
@@ -326,22 +374,27 @@ class MediaRepository(private val context: Context, private val settings: Settin
         return result
     }
 
-    private class Tags(val title: String?, val artist: String?, val album: String?)
-
-    private fun readTags(uri: Uri): Tags? {
+    /** Tags read from the file itself, cached on disk so each file is opened only once. */
+    private fun readTags(uri: Uri, cacheKey: String): MetadataCache.Entry {
+        metadataCache[cacheKey]?.let { return it }
         val retriever = MediaMetadataRetriever()
-        return try {
+        val entry = try {
             retriever.setDataSource(context, uri)
-            Tags(
-                retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE),
-                retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST),
-                retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUM),
+            MetadataCache.Entry(
+                title = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE),
+                artist = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST),
+                album = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUM),
+                durationMs = 0L,
+                width = 0,
+                height = 0,
             )
         } catch (e: Exception) {
-            null
+            MetadataCache.Entry(null, null, null, 0L, 0, 0)
         } finally {
             runCatching { retriever.release() }
         }
+        metadataCache[cacheKey] = entry
+        return entry
     }
 
     /** This value if it is usable (non-blank, nothing lost to "?"), otherwise [fallback]. */
@@ -351,8 +404,8 @@ class MediaRepository(private val context: Context, private val settings: Settin
     private fun String?.orUnknown(fallback: String): String =
         if (this.isNullOrBlank() || this == MediaStore.UNKNOWN_STRING) fallback else this
 
-    companion object {
-        private val ALBUM_ART_URI: Uri = Uri.parse("content://media/external/audio/albumart")
+    private companion object {
+        const val INDEX_DEBOUNCE_MS = 1_500L
     }
 }
 

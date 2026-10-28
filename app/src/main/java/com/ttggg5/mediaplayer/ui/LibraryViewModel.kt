@@ -79,7 +79,7 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     init {
-        media.refresh()
+        media.refreshIfNeeded()
     }
 
     fun refresh() = media.refresh()

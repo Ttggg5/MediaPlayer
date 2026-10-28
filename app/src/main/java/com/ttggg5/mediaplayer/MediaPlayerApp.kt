@@ -4,6 +4,7 @@ import android.app.Application
 import coil.ImageLoader
 import coil.ImageLoaderFactory
 import coil.decode.VideoFrameDecoder
+import com.ttggg5.mediaplayer.data.media.AudioArtworkFetcher
 import com.ttggg5.mediaplayer.data.media.MediaRepository
 import com.ttggg5.mediaplayer.data.playlist.AppDatabase
 import com.ttggg5.mediaplayer.data.playlist.PlaylistRepository
@@ -23,7 +24,10 @@ class MediaPlayerApp : Application(), ImageLoaderFactory {
 
     override fun newImageLoader(): ImageLoader =
         ImageLoader.Builder(this)
-            .components { add(VideoFrameDecoder.Factory()) }
+            .components {
+                add(AudioArtworkFetcher.Factory())
+                add(VideoFrameDecoder.Factory())
+            }
             .crossfade(true)
             .build()
 }
