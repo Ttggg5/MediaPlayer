@@ -4,12 +4,13 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class RepairTitleTest {
-    private fun repair(title: String?, name: String?) = MediaRepository.repairTitle(title, name)
+    private fun repair(title: String?, name: String?) = repairTitle(title, name)
 
     @Test
     fun emojiLostInTagIsRestoredFromFileName() {
         assertEquals("Sunny day 🌞", repair("Sunny day ?", "Sunny day 🌞.mp3"))
         assertEquals("Sunny day 🌞", repair("Sunny day ??", "Sunny day 🌞.mp3"))
+        assertEquals("I ❤️ you", repair("I ? you", "I ❤️ you.mp3"))
     }
 
     @Test
