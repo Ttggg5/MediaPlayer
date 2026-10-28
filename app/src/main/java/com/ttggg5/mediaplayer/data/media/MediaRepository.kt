@@ -3,6 +3,7 @@ package com.ttggg5.mediaplayer.data.media
 import android.content.ContentUris
 import android.content.Context
 import android.database.ContentObserver
+import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.os.Build
 import android.os.Handler
@@ -123,12 +124,24 @@ class MediaRepository(private val context: Context) {
                 val id = c.getLong(idCol)
                 val albumId = c.getLong(albumIdCol)
                 val (folderPath, folderName) = folderOf(c.getString(folderCol))
+                val uri = ContentUris.withAppendedId(audioCollection(), id)
+                var title = c.getString(titleCol)
+                var artist = c.getString(artistCol)
+                var album = c.getString(albumCol)
+                // Some OEM scanners store non-ASCII tag text as "?": read the tags from the file instead.
+                if (listOf(title, artist, album).any { it?.contains('?') == true }) {
+                    readTags(uri)?.let { tags ->
+                        title = tags.title.cleanOr(title)
+                        artist = tags.artist.cleanOr(artist)
+                        album = tags.album.cleanOr(album)
+                    }
+                }
                 result += AudioTrack(
                     id = id,
-                    uri = ContentUris.withAppendedId(audioCollection(), id),
-                    title = repairTitle(c.getString(titleCol), c.getString(nameCol)),
-                    artist = c.getString(artistCol).orUnknown("Unknown artist"),
-                    album = c.getString(albumCol).orUnknown("Unknown album"),
+                    uri = uri,
+                    title = repairTitle(title, c.getString(nameCol)),
+                    artist = artist.orUnknown("Unknown artist"),
+                    album = album.orUnknown("Unknown album"),
                     albumId = albumId,
                     durationMs = c.getLong(durationCol),
                     artworkUri = ContentUris.withAppendedId(ALBUM_ART_URI, albumId),
@@ -187,6 +200,28 @@ class MediaRepository(private val context: Context) {
         }
         return result
     }
+
+    private class Tags(val title: String?, val artist: String?, val album: String?)
+
+    private fun readTags(uri: Uri): Tags? {
+        val retriever = MediaMetadataRetriever()
+        return try {
+            retriever.setDataSource(context, uri)
+            Tags(
+                retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE),
+                retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST),
+                retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUM),
+            )
+        } catch (e: Exception) {
+            null
+        } finally {
+            runCatching { retriever.release() }
+        }
+    }
+
+    /** This value if it is usable (non-blank, nothing lost to "?"), otherwise [fallback]. */
+    private fun String?.cleanOr(fallback: String?): String? =
+        this?.takeIf { it.isNotBlank() && '?' !in it } ?: fallback
 
     private fun String?.orUnknown(fallback: String): String =
         if (this.isNullOrBlank() || this == MediaStore.UNKNOWN_STRING) fallback else this
