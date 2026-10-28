@@ -54,6 +54,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ttggg5.mediaplayer.AppContainer
+import com.ttggg5.mediaplayer.data.media.folderLabel
 import com.ttggg5.mediaplayer.data.settings.AppSettings
 import com.ttggg5.mediaplayer.data.settings.ThemeMode
 import com.ttggg5.mediaplayer.ui.components.ScreenScaffold
@@ -185,7 +186,7 @@ fun SettingsScreen(container: AppContainer, onBack: () -> Unit) {
 
 private fun folderSummary(folders: Set<String>, keyOf: (String) -> String?): String = when (folders.size) {
     0 -> "All folders"
-    1 -> keyOf(folders.first())?.let(com.ttggg5.mediaplayer.data.media::folderLabel) ?: "1 folder"
+    1 -> keyOf(folders.first())?.let(::folderLabel) ?: "1 folder"
     else -> "${folders.size} folders"
 }
 
