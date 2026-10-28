@@ -39,9 +39,11 @@ android {
         if (releaseStoreFile != null) {
             create("release") {
                 storeFile = rootProject.file(releaseStoreFile)
-                storePassword = signingValue("SIGNING_STORE_PASSWORD", "storePassword")
+                val storePass = signingValue("SIGNING_STORE_PASSWORD", "storePassword")
+                storePassword = storePass
                 keyAlias = signingValue("SIGNING_KEY_ALIAS", "keyAlias")
-                keyPassword = signingValue("SIGNING_KEY_PASSWORD", "keyPassword")
+                // PKCS12 keystores use one password for the store and the key.
+                keyPassword = signingValue("SIGNING_KEY_PASSWORD", "keyPassword") ?: storePass
             }
         }
     }
