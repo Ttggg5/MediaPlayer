@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.ttggg5.mediaplayer.data.media.SongSort
 import com.ttggg5.mediaplayer.data.media.VideoSort
@@ -73,6 +74,22 @@ class SettingsRepository(private val context: Context) {
     suspend fun setHideShortAudio(enabled: Boolean) = context.dataStore.edit { it[HIDE_SHORT_AUDIO] = enabled }
     suspend fun setAutoCheckUpdates(enabled: Boolean) = context.dataStore.edit { it[AUTO_CHECK_UPDATES] = enabled }
 
+    /** Library folder keys ("volumeId:path/") to scan for music; empty means all folders. */
+    val musicFolders: Flow<Set<String>> = context.dataStore.data.map { it[MUSIC_FOLDERS].orEmpty() }
+
+    /** Library folder keys to scan for videos; empty means all folders. */
+    val videoFolders: Flow<Set<String>> = context.dataStore.data.map { it[VIDEO_FOLDERS].orEmpty() }
+
+    suspend fun addFolder(video: Boolean, key: String) = context.dataStore.edit {
+        val pref = if (video) VIDEO_FOLDERS else MUSIC_FOLDERS
+        it[pref] = it[pref].orEmpty() + key
+    }
+
+    suspend fun removeFolder(video: Boolean, key: String) = context.dataStore.edit {
+        val pref = if (video) VIDEO_FOLDERS else MUSIC_FOLDERS
+        it[pref] = it[pref].orEmpty() - key
+    }
+
     /** Saved resume position for a video, or 0 if none. */
     suspend fun videoPosition(uri: String): Long =
         context.dataStore.data.first()[positionKey(uri)] ?: 0L
@@ -121,5 +138,7 @@ class SettingsRepository(private val context: Context) {
         val RESUME_VIDEOS = booleanPreferencesKey("resume_videos")
         val HIDE_SHORT_AUDIO = booleanPreferencesKey("hide_short_audio")
         val AUTO_CHECK_UPDATES = booleanPreferencesKey("auto_check_updates")
+        val MUSIC_FOLDERS = stringSetPreferencesKey("music_folders")
+        val VIDEO_FOLDERS = stringSetPreferencesKey("video_folders")
     }
 }

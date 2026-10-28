@@ -6,6 +6,7 @@ import android.database.ContentObserver
 import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.os.Build
+import android.os.Environment
 import android.os.Handler
 import android.os.Looper
 import android.provider.MediaStore
@@ -14,21 +15,32 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import com.ttggg5.mediaplayer.data.settings.SettingsRepository
 import java.io.File
 
 /** Reads music and videos from the device's MediaStore and keeps them up to date. */
-class MediaRepository(private val context: Context) {
+class MediaRepository(private val context: Context, settings: SettingsRepository) {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
     private val _songs = MutableStateFlow<List<AudioTrack>>(emptyList())
-    val songs: StateFlow<List<AudioTrack>> = _songs.asStateFlow()
-
     private val _videos = MutableStateFlow<List<VideoItem>>(emptyList())
-    val videos: StateFlow<List<VideoItem>> = _videos.asStateFlow()
+
+    /** Songs inside the user's chosen music folders (all songs when none are chosen). */
+    val songs: StateFlow<List<AudioTrack>> =
+        combine(_songs, settings.musicFolders) { all, folders -> all.filter { isInFolders(it.location, folders) } }
+            .stateIn(scope, SharingStarted.Eagerly, emptyList())
+
+    /** Videos inside the user's chosen video folders (all videos when none are chosen). */
+    val videos: StateFlow<List<VideoItem>> =
+        combine(_videos, settings.videoFolders) { all, folders -> all.filter { isInFolders(it.location, folders) } }
+            .stateIn(scope, SharingStarted.Eagerly, emptyList())
 
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
@@ -80,6 +92,26 @@ class MediaRepository(private val context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) MediaStore.MediaColumns.RELATIVE_PATH
         else MediaStore.MediaColumns.DATA
 
+    /** Projection columns needed to build [locationOf]. */
+    private val locationColumns: Array<String> =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) arrayOf(folderColumn, MediaStore.MediaColumns.VOLUME_NAME)
+        else arrayOf(folderColumn)
+
+    private val primaryRoot: String by lazy {
+        @Suppress("DEPRECATION")
+        Environment.getExternalStorageDirectory().absolutePath
+    }
+
+    private fun locationOf(c: android.database.Cursor): String {
+        val folder = c.getString(c.getColumnIndexOrThrow(folderColumn)).orEmpty()
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val volume = c.getString(c.getColumnIndexOrThrow(MediaStore.MediaColumns.VOLUME_NAME)) ?: "primary"
+            locationKey(volume, folder)
+        } else {
+            locationKeyFromPath(folder, primaryRoot).orEmpty()
+        }
+    }
+
     private fun folderOf(raw: String?): Pair<String, String> {
         if (raw.isNullOrBlank()) return "" to "Unknown"
         val path = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -101,8 +133,7 @@ class MediaRepository(private val context: Context) {
             MediaStore.Audio.Media.ALBUM_ID,
             MediaStore.Audio.Media.DURATION,
             MediaStore.Audio.Media.DATE_ADDED,
-            folderColumn,
-        )
+        ) + locationColumns
         val result = mutableListOf<AudioTrack>()
         context.contentResolver.query(
             audioCollection(),
@@ -148,6 +179,7 @@ class MediaRepository(private val context: Context) {
                     folderPath = folderPath,
                     folderName = folderName,
                     dateAdded = c.getLong(dateCol),
+                    location = locationOf(c),
                 )
             }
         }
@@ -163,8 +195,7 @@ class MediaRepository(private val context: Context) {
             MediaStore.Video.Media.WIDTH,
             MediaStore.Video.Media.HEIGHT,
             MediaStore.Video.Media.DATE_ADDED,
-            folderColumn,
-        )
+        ) + locationColumns
         val result = mutableListOf<VideoItem>()
         context.contentResolver.query(
             videoCollection(),
@@ -195,6 +226,7 @@ class MediaRepository(private val context: Context) {
                     folderPath = folderPath,
                     folderName = folderName,
                     dateAdded = c.getLong(dateCol),
+                    location = locationOf(c),
                 )
             }
         }

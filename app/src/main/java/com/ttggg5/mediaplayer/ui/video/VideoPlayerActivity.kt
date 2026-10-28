@@ -58,6 +58,11 @@ class VideoPlayerActivity : ComponentActivity(), VideoPlayerHost {
     /** URI of the item currently loaded, used to remember where each video was left off. */
     private var currentUri: String? = null
 
+    private val container by lazy { (application as MediaPlayerApp).container }
+
+    /** Whether the music pane is shown next to the video. */
+    private val splitMode = mutableStateOf(false)
+
     private val audioManager by lazy { getSystemService(Context.AUDIO_SERVICE) as AudioManager }
 
     private val supportsPip: Boolean by lazy {
@@ -69,14 +74,10 @@ class VideoPlayerActivity : ComponentActivity(), VideoPlayerHost {
         WindowCompat.setDecorFitsSystemWindows(window, false)
         hideSystemBars()
 
+        splitMode.value = savedInstanceState?.getBoolean(STATE_SPLIT) ?: false
         player = ExoPlayer.Builder(this)
-            .setAudioAttributes(
-                AudioAttributes.Builder()
-                    .setUsage(C.USAGE_MEDIA)
-                    .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE)
-                    .build(),
-                /* handleAudioFocus = */ true,
-            )
+            // In split mode the video must not take audio focus, or it would pause the music.
+            .setAudioAttributes(VIDEO_AUDIO, /* handleAudioFocus = */ !splitMode.value)
             .setHandleAudioBecomingNoisy(true)
             .build()
         player.addListener(object : Player.Listener {
@@ -93,7 +94,7 @@ class VideoPlayerActivity : ComponentActivity(), VideoPlayerHost {
 
             override fun onVideoSizeChanged(videoSize: VideoSize) {
                 updatePipParams()
-                if (!orientationChosen && videoSize.width > 0 && videoSize.height > 0) {
+                if (!orientationChosen && !splitMode.value && videoSize.width > 0 && videoSize.height > 0) {
                     orientationChosen = true
                     requestedOrientation = if (videoSize.width >= videoSize.height) {
                         ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
@@ -118,12 +119,21 @@ class VideoPlayerActivity : ComponentActivity(), VideoPlayerHost {
         setContent {
             val appSettings by settings.appSettings.collectAsStateWithLifecycle(initialValue = AppSettings())
             MediaPlayerTheme(darkTheme = true, dynamicColor = appSettings.dynamicColor) {
-                VideoPlayerScreen(
-                    player = player,
-                    inPictureInPicture = inPictureInPicture.value,
-                    host = this,
-                    gesturesEnabled = appSettings.videoGestures,
-                    seekStepMs = appSettings.seekStepSeconds * 1_000L,
+                val split = splitMode.value && !inPictureInPicture.value
+                SplitPlayerLayout(
+                    split = split,
+                    video = { modifier ->
+                        VideoPlayerScreen(
+                            player = player,
+                            inPictureInPicture = inPictureInPicture.value,
+                            host = this,
+                            gesturesEnabled = appSettings.videoGestures,
+                            seekStepMs = appSettings.seekStepSeconds * 1_000L,
+                            modifier = modifier,
+                            split = split,
+                        )
+                    },
+                    other = { modifier -> MusicPane(container, player, modifier) },
                 )
             }
         }
@@ -249,6 +259,21 @@ class VideoPlayerActivity : ComponentActivity(), VideoPlayerHost {
 
     override fun close() = finish()
 
+    override fun toggleSplit() {
+        splitMode.value = !splitMode.value
+        player.setAudioAttributes(VIDEO_AUDIO, /* handleAudioFocus = */ !splitMode.value)
+        if (splitMode.value) {
+            // Let the panes follow the device: stacked in portrait, side by side in landscape.
+            orientationChosen = true
+            requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        }
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putBoolean(STATE_SPLIT, splitMode.value)
+    }
+
     override fun toggleOrientation() {
         orientationChosen = true
         val landscape = resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
@@ -289,6 +314,11 @@ class VideoPlayerActivity : ComponentActivity(), VideoPlayerHost {
         private const val EXTRA_TITLES = "titles"
         private const val EXTRA_INDEX = "index"
         private const val EXTRA_SINGLE_TITLE = "title"
+        private const val STATE_SPLIT = "split"
+        private val VIDEO_AUDIO: AudioAttributes = AudioAttributes.Builder()
+            .setUsage(C.USAGE_MEDIA)
+            .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE)
+            .build()
         private const val RESUME_END_MARGIN_MS = 5_000L
         private const val RESUME_MIN_MS = 3_000L
         private const val MAX_PIP_RATIO = 2.39f
@@ -318,6 +348,7 @@ interface VideoPlayerHost {
     fun close()
     fun enterPip()
     fun toggleOrientation()
+    fun toggleSplit()
     fun getBrightness(): Float
     fun setBrightness(value: Float)
     fun getVolume(): Float

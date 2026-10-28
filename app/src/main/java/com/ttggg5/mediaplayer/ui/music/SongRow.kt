@@ -39,7 +39,7 @@ import com.ttggg5.mediaplayer.ui.components.formatDuration
 class SongActions(
     val onPlayNext: (AudioTrack) -> Unit,
     val onAddToQueue: (AudioTrack) -> Unit,
-    val onAddToPlaylist: (AudioTrack) -> Unit,
+    val onAddToPlaylist: ((AudioTrack) -> Unit)? = null,
 )
 
 data class ExtraSongAction(val label: String, val icon: ImageVector, val onClick: (AudioTrack) -> Unit)
@@ -96,11 +96,13 @@ fun SongRow(
                         leadingIcon = { Icon(Icons.AutoMirrored.Rounded.QueueMusic, null) },
                         onClick = { menuOpen = false; actions.onAddToQueue(track) },
                     )
-                    DropdownMenuItem(
-                        text = { Text("Add to playlist") },
-                        leadingIcon = { Icon(Icons.AutoMirrored.Rounded.PlaylistAdd, null) },
-                        onClick = { menuOpen = false; actions.onAddToPlaylist(track) },
-                    )
+                    actions.onAddToPlaylist?.let { addToPlaylist ->
+                        DropdownMenuItem(
+                            text = { Text("Add to playlist") },
+                            leadingIcon = { Icon(Icons.AutoMirrored.Rounded.PlaylistAdd, null) },
+                            onClick = { menuOpen = false; addToPlaylist(track) },
+                        )
+                    }
                     extraActions.forEach { extra ->
                         DropdownMenuItem(
                             text = { Text(extra.label) },

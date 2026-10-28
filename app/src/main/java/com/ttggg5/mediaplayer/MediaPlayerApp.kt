@@ -30,9 +30,9 @@ class MediaPlayerApp : Application(), ImageLoaderFactory {
 
 /** Simple manual dependency container shared by the whole app. */
 class AppContainer(app: Application) {
-    val mediaRepository = MediaRepository(app)
-    val playlistRepository = PlaylistRepository(AppDatabase.create(app).playlistDao())
     val settingsRepository = SettingsRepository(app)
+    val mediaRepository = MediaRepository(app, settingsRepository)
+    val playlistRepository = PlaylistRepository(AppDatabase.create(app).playlistDao())
     val musicController by lazy { MusicController(app) }
     val updateManager = UpdateManager(app)
 }

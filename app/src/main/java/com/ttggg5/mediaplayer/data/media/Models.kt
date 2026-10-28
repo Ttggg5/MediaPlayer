@@ -14,6 +14,8 @@ data class AudioTrack(
     val folderPath: String,
     val folderName: String,
     val dateAdded: Long,
+    /** Storage location key ("volumeId:relative/path/"), used for the library folder filter. */
+    val location: String = "",
 )
 
 data class VideoItem(
@@ -27,6 +29,8 @@ data class VideoItem(
     val folderPath: String,
     val folderName: String,
     val dateAdded: Long,
+    /** Storage location key ("volumeId:relative/path/"), used for the library folder filter. */
+    val location: String = "",
 )
 
 data class Album(

@@ -33,7 +33,9 @@ import androidx.compose.material.icons.rounded.FastRewind
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PictureInPictureAlt
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Fullscreen
 import androidx.compose.material.icons.rounded.ScreenRotation
+import androidx.compose.material.icons.rounded.VerticalSplit
 import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material.icons.rounded.SkipPrevious
 import androidx.compose.material.icons.rounded.Speed
@@ -63,6 +65,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -104,6 +107,8 @@ fun VideoPlayerScreen(
     host: VideoPlayerHost,
     gesturesEnabled: Boolean,
     seekStepMs: Long,
+    modifier: Modifier = Modifier,
+    split: Boolean = false,
 ) {
     val stepLabel = "${seekStepMs / 1000}s"
     fun seekBy(delta: Long) {
@@ -160,7 +165,7 @@ fun VideoPlayerScreen(
 
     fun touch() { interaction++ }
 
-    Box(Modifier.fillMaxSize().background(Color.Black)) {
+    Box(modifier.fillMaxSize().clipToBounds().background(Color.Black)) {
         AndroidView(
             factory = { ctx ->
                 PlayerView(ctx).apply {
@@ -306,7 +311,13 @@ fun VideoPlayerScreen(
                         if (host.pipSupported) {
                             ControlIcon(Icons.Rounded.PictureInPictureAlt, "Picture in picture") { host.enterPip() }
                         }
-                        ControlIcon(Icons.Rounded.ScreenRotation, "Rotate") { host.toggleOrientation(); touch() }
+                        ControlIcon(
+                            if (split) Icons.Rounded.Fullscreen else Icons.Rounded.VerticalSplit,
+                            if (split) "Close music pane" else "Play music alongside",
+                        ) { host.toggleSplit(); touch() }
+                        if (!split) {
+                            ControlIcon(Icons.Rounded.ScreenRotation, "Rotate") { host.toggleOrientation(); touch() }
+                        }
                     }
 
                     // Center transport controls.

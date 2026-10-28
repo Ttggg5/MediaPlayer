@@ -25,6 +25,7 @@ data class MusicState(
     val repeatMode: Int = Player.REPEAT_MODE_OFF,
     val queue: List<MediaItem> = emptyList(),
     val currentIndex: Int = 0,
+    val volume: Float = 1f,
 ) {
     val title: String get() = currentItem?.mediaMetadata?.title?.toString().orEmpty()
     val artist: String get() = currentItem?.mediaMetadata?.artist?.toString().orEmpty()
@@ -68,6 +69,7 @@ class MusicController(context: Context) {
             repeatMode = player.repeatMode,
             queue = queue,
             currentIndex = player.currentMediaItemIndex,
+            volume = player.volume,
         )
     }
 
@@ -134,6 +136,9 @@ class MusicController(context: Context) {
     }
 
     fun pause() = withController { it.pause() }
+
+    /** Volume of the music player itself (0–1), independent of the system volume. */
+    fun setVolume(volume: Float) = withController { it.volume = volume.coerceIn(0f, 1f) }
 
     companion object {
         fun uriMediaItem(uri: Uri, title: String?): MediaItem =

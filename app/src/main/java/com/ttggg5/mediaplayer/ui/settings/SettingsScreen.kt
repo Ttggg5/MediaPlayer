@@ -20,6 +20,8 @@ import androidx.compose.material.icons.rounded.DarkMode
 import androidx.compose.material.icons.rounded.FastForward
 import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Info
+import androidx.compose.material.icons.rounded.LibraryMusic
+import androidx.compose.material.icons.rounded.VideoLibrary
 import androidx.compose.material.icons.rounded.MusicOff
 import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material.icons.rounded.Refresh
@@ -68,6 +70,8 @@ fun SettingsScreen(container: AppContainer, onBack: () -> Unit) {
     val current by settings.appSettings.collectAsStateWithLifecycle(initialValue = AppSettings())
     val updateState by updates.state.collectAsStateWithLifecycle()
     var picker by remember { mutableStateOf<String?>(null) }
+    val musicFolders by settings.musicFolders.collectAsStateWithLifecycle(initialValue = emptySet())
+    val videoFolders by settings.videoFolders.collectAsStateWithLifecycle(initialValue = emptySet())
 
     ScreenScaffold(
         topBar = { scroll ->
@@ -100,6 +104,8 @@ fun SettingsScreen(container: AppContainer, onBack: () -> Unit) {
             }
 
             Section("Library")
+            ClickRow(Icons.Rounded.LibraryMusic, "Music folders", folderSummary(musicFolders)) { picker = "musicFolders" }
+            ClickRow(Icons.Rounded.VideoLibrary, "Video folders", folderSummary(videoFolders)) { picker = "videoFolders" }
             SwitchRow(
                 Icons.Rounded.MusicOff,
                 "Hide short audio",
@@ -147,7 +153,23 @@ fun SettingsScreen(container: AppContainer, onBack: () -> Unit) {
             selected = current.seekStepSeconds,
             onDismiss = { picker = null },
         ) { scope.launch { settings.setSeekStepSeconds(it) } }
+        "musicFolders", "videoFolders" -> {
+            val video = picker == "videoFolders"
+            FolderDialog(
+                title = if (video) "Video folders" else "Music folders",
+                folders = if (video) videoFolders else musicFolders,
+                onAdd = { scope.launch { settings.addFolder(video, it) } },
+                onRemove = { scope.launch { settings.removeFolder(video, it) } },
+                onDismiss = { picker = null },
+            )
+        }
     }
+}
+
+private fun folderSummary(folders: Set<String>): String = when (folders.size) {
+    0 -> "All folders"
+    1 -> com.ttggg5.mediaplayer.data.media.folderLabel(folders.first())
+    else -> "${folders.size} folders"
 }
 
 private fun updateStatusText(state: UpdateState, updates: UpdateManager): String = when (state) {

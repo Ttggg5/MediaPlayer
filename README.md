@@ -12,6 +12,11 @@ A modern Android media player for music and video, built with Kotlin, Jetpack Co
 - Queue: play next, add to queue, jump to, reorder and remove
 - Playlists stored in a Room database: create, rename, delete, add and remove songs
 
+**Split screen**
+- Play a video and music at the same time: tap the split button in the video player
+- Drag the divider to resize the panes (stacked in portrait, side by side in landscape)
+- Separate volume sliders mix the video and the music; the music pane can browse songs and edit the queue
+
 **Video**
 - Thumbnail grid with duration and resolution, folder filter chips, search and sorting
 - Full-screen player with custom Compose controls
@@ -22,6 +27,7 @@ A modern Android media player for music and video, built with Kotlin, Jetpack Co
 **Settings & updates**
 - Theme (system/light/dark) and dynamic colors
 - Video gestures on/off, skip length, resume where you left off
+- Choose which folders are scanned, separately for music and videos (subfolders included)
 - Hide short audio clips, rescan library
 - Built-in updater: checks GitHub Releases, downloads the new APK and opens the installer
 
