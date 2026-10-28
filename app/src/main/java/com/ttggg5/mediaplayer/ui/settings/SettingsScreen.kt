@@ -72,6 +72,9 @@ fun SettingsScreen(container: AppContainer, onBack: () -> Unit) {
     var picker by remember { mutableStateOf<String?>(null) }
     val musicFolders by settings.musicFolders.collectAsStateWithLifecycle(initialValue = emptySet())
     val videoFolders by settings.videoFolders.collectAsStateWithLifecycle(initialValue = emptySet())
+    val media = container.mediaRepository
+    val allSongs by media.allSongs.collectAsStateWithLifecycle()
+    val allVideos by media.allVideos.collectAsStateWithLifecycle()
 
     ScreenScaffold(
         topBar = { scroll ->
@@ -158,6 +161,12 @@ fun SettingsScreen(container: AppContainer, onBack: () -> Unit) {
             FolderDialog(
                 title = if (video) "Video folders" else "Music folders",
                 folders = if (video) videoFolders else musicFolders,
+                countFor = { key ->
+                    val folder = setOf(key)
+                    if (video) allVideos.count { media.inFolders(it.location, it.filePath, folder) }
+                    else allSongs.count { media.inFolders(it.location, it.filePath, folder) }
+                },
+                itemLabel = if (video) "videos" else "songs",
                 onAdd = { scope.launch { settings.addFolder(video, it) } },
                 onRemove = { scope.launch { settings.removeFolder(video, it) } },
                 onDismiss = { picker = null },

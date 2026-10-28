@@ -34,13 +34,33 @@ class MediaRepository(private val context: Context, settings: SettingsRepository
 
     /** Songs inside the user's chosen music folders (all songs when none are chosen). */
     val songs: StateFlow<List<AudioTrack>> =
-        combine(_songs, settings.musicFolders) { all, folders -> all.filter { isInFolders(it.location, folders) } }
+        combine(_songs, settings.musicFolders) { all, folders -> all.filter { inFolders(it.location, it.filePath, folders) } }
             .stateIn(scope, SharingStarted.Eagerly, emptyList())
 
     /** Videos inside the user's chosen video folders (all videos when none are chosen). */
     val videos: StateFlow<List<VideoItem>> =
-        combine(_videos, settings.videoFolders) { all, folders -> all.filter { isInFolders(it.location, folders) } }
+        combine(_videos, settings.videoFolders) { all, folders -> all.filter { inFolders(it.location, it.filePath, folders) } }
             .stateIn(scope, SharingStarted.Eagerly, emptyList())
+
+    /** Every scanned song and video, before the folder filter (used to count files per folder). */
+    val allSongs: StateFlow<List<AudioTrack>> = _songs.asStateFlow()
+    val allVideos: StateFlow<List<VideoItem>> = _videos.asStateFlow()
+
+    /** Mount path of every storage volume, keyed like folder keys ("primary", "1A2B-3C4D"). */
+    private val volumeRoots: Map<String, String> by lazy {
+        val roots = mutableMapOf("primary" to primaryRoot)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            val storage = context.getSystemService(Context.STORAGE_SERVICE) as android.os.storage.StorageManager
+            storage.storageVolumes.forEach { volume ->
+                val uuid = volume.uuid ?: return@forEach
+                volume.directory?.let { roots[uuid.uppercase()] = it.absolutePath }
+            }
+        }
+        roots
+    }
+
+    fun inFolders(location: String, filePath: String, folders: Set<String>): Boolean =
+        isInFolders(location, filePath, folders, volumeRoots)
 
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
@@ -94,8 +114,18 @@ class MediaRepository(private val context: Context, settings: SettingsRepository
 
     /** Projection columns needed to build [locationOf]. */
     private val locationColumns: Array<String> =
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) arrayOf(folderColumn, MediaStore.MediaColumns.VOLUME_NAME)
-        else arrayOf(folderColumn)
+        @Suppress("DEPRECATION")
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            arrayOf(folderColumn, MediaStore.MediaColumns.VOLUME_NAME, MediaStore.MediaColumns.DATA)
+        } else {
+            arrayOf(folderColumn)
+        }
+
+    @Suppress("DEPRECATION")
+    private fun filePathOf(c: android.database.Cursor): String {
+        val index = c.getColumnIndex(MediaStore.MediaColumns.DATA)
+        return if (index >= 0) c.getString(index).orEmpty() else ""
+    }
 
     private val primaryRoot: String by lazy {
         @Suppress("DEPRECATION")
@@ -180,6 +210,7 @@ class MediaRepository(private val context: Context, settings: SettingsRepository
                     folderName = folderName,
                     dateAdded = c.getLong(dateCol),
                     location = locationOf(c),
+                    filePath = filePathOf(c),
                 )
             }
         }
@@ -227,6 +258,7 @@ class MediaRepository(private val context: Context, settings: SettingsRepository
                     folderName = folderName,
                     dateAdded = c.getLong(dateCol),
                     location = locationOf(c),
+                    filePath = filePathOf(c),
                 )
             }
         }

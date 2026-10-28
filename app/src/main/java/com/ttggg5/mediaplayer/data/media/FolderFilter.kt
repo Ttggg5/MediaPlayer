@@ -12,6 +12,8 @@ const val EXTERNAL_STORAGE_AUTHORITY = "com.android.externalstorage.documents"
 fun treeDocIdToFolderKey(docId: String): String? {
     val volume = docId.substringBefore(':', missingDelimiterValue = "").takeIf { it.isNotBlank() } ?: return null
     val path = docId.substringAfter(':').trim('/')
+    // The picker's "Documents" shortcut reports ids like "home:Notes", meaning primary:Documents/Notes.
+    if (volume == "home") return locationKey("primary", "Documents/$path")
     return normalizedVolume(volume) + ":" + if (path.isEmpty()) "" else "$path/"
 }
 
@@ -37,6 +39,30 @@ fun locationKeyFromPath(absolutePath: String, primaryRoot: String): String? {
 fun isInFolders(location: String, folders: Set<String>): Boolean =
     folders.isEmpty() || folders.any { location.startsWith(it, ignoreCase = true) }
 
+/**
+ * Absolute directory of a folder key, e.g. "primary:Music/" → "/storage/emulated/0/Music/".
+ * [volumeRoots] maps volume ids ("primary", "1A2B-3C4D") to their mount paths; removable
+ * volumes not in the map fall back to the usual "/storage/<UUID>".
+ */
+fun folderKeyToPath(key: String, volumeRoots: Map<String, String>): String? {
+    val volume = key.substringBefore(':')
+    val root = volumeRoots[volume] ?: volumeRoots[volume.uppercase()]
+        ?: if (volume == "primary") return null else "/storage/$volume"
+    return root.trimEnd('/') + "/" + key.substringAfter(':')
+}
+
+/**
+ * True when a file is inside one of [folders] (subfolders included). Matches on the location key
+ * and, as a fallback for devices that name volumes differently, on the file's absolute path.
+ */
+fun isInFolders(location: String, filePath: String, folders: Set<String>, volumeRoots: Map<String, String>): Boolean =
+    folders.isEmpty() || folders.any { key ->
+        location.startsWith(key, ignoreCase = true) ||
+            (filePath.isNotEmpty() && folderKeyToPath(key, volumeRoots)?.let { dir ->
+                filePath.startsWith(if (dir.endsWith('/')) dir else "$dir/", ignoreCase = true)
+            } == true)
+    }
+
 /** Human-readable label such as "Internal storage › Music › Anime". */
 fun folderLabel(key: String): String {
     val volume = key.substringBefore(':')
@@ -46,6 +72,6 @@ fun folderLabel(key: String): String {
 }
 
 private fun normalizedVolume(volume: String): String = when (volume.lowercase()) {
-    "primary", "external_primary", "emulated", "0" -> "primary"
+    "primary", "external_primary", "external", "emulated", "0" -> "primary"
     else -> volume.uppercase()
 }

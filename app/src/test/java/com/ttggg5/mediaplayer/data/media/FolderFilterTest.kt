@@ -13,6 +13,8 @@ class FolderFilterTest {
         assertEquals("primary:", treeDocIdToFolderKey("primary:"))
         assertEquals("1A2B-3C4D:Videos/", treeDocIdToFolderKey("1a2b-3c4d:Videos/"))
         assertNull(treeDocIdToFolderKey("raw"))
+        assertEquals("primary:Documents/Songs/", treeDocIdToFolderKey("home:Songs"))
+        assertEquals("primary:Documents/", treeDocIdToFolderKey("home:"))
     }
 
     @Test
@@ -50,5 +52,30 @@ class FolderFilterTest {
         assertEquals("Internal storage › Music › Anime", folderLabel("primary:Music/Anime/"))
         assertEquals("SD card (1A2B-3C4D) › Videos", folderLabel("1A2B-3C4D:Videos/"))
         assertEquals("Internal storage", folderLabel("primary:"))
+    }
+}
+
+class FolderPathFallbackTest {
+    private val roots = mapOf("primary" to "/storage/emulated/0", "1A2B-3C4D" to "/storage/1A2B-3C4D")
+
+    @Test
+    fun folderKeysResolveToDirectories() {
+        assertEquals("/storage/emulated/0/Music/", folderKeyToPath("primary:Music/", roots))
+        assertEquals("/storage/1A2B-3C4D/Videos/", folderKeyToPath("1A2B-3C4D:Videos/", roots))
+        assertEquals("/storage/9999-0000/Videos/", folderKeyToPath("9999-0000:Videos/", roots))
+    }
+
+    @Test
+    fun absolutePathMatchesWhenVolumeNamesDiffer() {
+        val folders = setOf("1A2B-3C4D:Music/")
+        // MediaStore reported an unexpected volume name, but the file path is inside the folder.
+        assertTrue(isInFolders("WEIRD:Music/", "/storage/1A2B-3C4D/Music/Anime/a.m4a", folders, roots))
+        assertFalse(isInFolders("WEIRD:Music2/", "/storage/1A2B-3C4D/Music2/a.m4a", folders, roots))
+        assertTrue(isInFolders("primary:Music/", "", setOf("primary:Music/"), roots))
+    }
+
+    @Test
+    fun externalVolumeNameCountsAsPrimary() {
+        assertEquals("primary:Music/", locationKey("external", "Music/"))
     }
 }

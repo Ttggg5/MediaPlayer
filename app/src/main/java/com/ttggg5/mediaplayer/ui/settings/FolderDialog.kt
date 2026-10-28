@@ -33,6 +33,9 @@ import com.ttggg5.mediaplayer.data.media.treeDocIdToFolderKey
 fun FolderDialog(
     title: String,
     folders: Set<String>,
+    /** Number of scanned files inside a folder, shown under it so empty picks are obvious. */
+    countFor: (String) -> Int,
+    itemLabel: String,
     onAdd: (String) -> Unit,
     onRemove: (String) -> Unit,
     onDismiss: () -> Unit,
@@ -71,6 +74,13 @@ fun FolderDialog(
                         ListItem(
                             leadingContent = { Icon(Icons.Rounded.Folder, null) },
                             headlineContent = { Text(folderLabel(key), maxLines = 2, overflow = TextOverflow.Ellipsis) },
+                            supportingContent = {
+                                val count = countFor(key)
+                                Text(
+                                    if (count == 0) "No $itemLabel found here" else "$count $itemLabel",
+                                    color = if (count == 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            },
                             trailingContent = {
                                 IconButton(onClick = { onRemove(key) }) { Icon(Icons.Rounded.Close, "Remove") }
                             },
