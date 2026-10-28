@@ -9,6 +9,7 @@ import android.os.Build
 import android.os.Environment
 import android.os.Handler
 import android.os.Looper
+import android.provider.DocumentsContract
 import android.provider.MediaStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -24,27 +25,84 @@ import kotlinx.coroutines.withContext
 import com.ttggg5.mediaplayer.data.settings.SettingsRepository
 import java.io.File
 
-/** Reads music and videos from the device's MediaStore and keeps them up to date. */
-class MediaRepository(private val context: Context, settings: SettingsRepository) {
+/**
+ * Reads music and videos from the device's MediaStore and keeps them up to date. Folders the
+ * user chose with the folder picker are also scanned directly, so files MediaStore skips
+ * (e.g. in folders with a .nomedia file) still show up.
+ */
+class MediaRepository(private val context: Context, private val settings: SettingsRepository) {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private val scanner = FolderScanner(context)
 
     private val _songs = MutableStateFlow<List<AudioTrack>>(emptyList())
     private val _videos = MutableStateFlow<List<VideoItem>>(emptyList())
+    private val _scannedSongs = MutableStateFlow<List<AudioTrack>>(emptyList())
+    private val _scannedVideos = MutableStateFlow<List<VideoItem>>(emptyList())
 
-    /** Songs inside the user's chosen music folders (all songs when none are chosen). */
+    /** Every song and video found (MediaStore plus direct scans), before the folder filter. */
+    val allSongs: StateFlow<List<AudioTrack>> =
+        combine(_songs, _scannedSongs) { indexed, scanned -> mergeSongs(indexed, scanned) }
+            .stateIn(scope, SharingStarted.Eagerly, emptyList())
+    val allVideos: StateFlow<List<VideoItem>> =
+        combine(_videos, _scannedVideos) { indexed, scanned -> mergeVideos(indexed, scanned) }
+            .stateIn(scope, SharingStarted.Eagerly, emptyList())
+
+    /** Songs inside the user's chosen music folders (all MediaStore songs when none are chosen). */
     val songs: StateFlow<List<AudioTrack>> =
-        combine(_songs, settings.musicFolders) { all, folders -> all.filter { inFolders(it.location, it.filePath, folders) } }
-            .stateIn(scope, SharingStarted.Eagerly, emptyList())
+        combine(_songs, allSongs, settings.musicFolders) { indexed, all, entries ->
+            if (entries.isEmpty()) indexed else keysOf(entries).let { keys -> all.filter { inFolders(it.location, it.filePath, keys) } }
+        }.stateIn(scope, SharingStarted.Eagerly, emptyList())
 
-    /** Videos inside the user's chosen video folders (all videos when none are chosen). */
+    /** Videos inside the user's chosen video folders (all MediaStore videos when none are chosen). */
     val videos: StateFlow<List<VideoItem>> =
-        combine(_videos, settings.videoFolders) { all, folders -> all.filter { inFolders(it.location, it.filePath, folders) } }
-            .stateIn(scope, SharingStarted.Eagerly, emptyList())
+        combine(_videos, allVideos, settings.videoFolders) { indexed, all, entries ->
+            if (entries.isEmpty()) indexed else keysOf(entries).let { keys -> all.filter { inFolders(it.location, it.filePath, keys) } }
+        }.stateIn(scope, SharingStarted.Eagerly, emptyList())
 
-    /** Every scanned song and video, before the folder filter (used to count files per folder). */
-    val allSongs: StateFlow<List<AudioTrack>> = _songs.asStateFlow()
-    val allVideos: StateFlow<List<VideoItem>> = _videos.asStateFlow()
+    private var musicTrees: Set<Uri> = emptySet()
+    private var videoTrees: Set<Uri> = emptySet()
+
+    init {
+        // Re-scan whenever the chosen folders change.
+        scope.launch {
+            combine(settings.musicFolders, settings.videoFolders) { music, video -> treesOf(music) to treesOf(video) }
+                .collect { (music, video) ->
+                    musicTrees = music
+                    videoTrees = video
+                    scanFolders()
+                }
+        }
+    }
+
+    /** Folder key ("volumeId:path/") of a saved folder entry, whether a tree URI or a legacy key. */
+    fun folderKey(entry: String): String? = folderEntryKey(entry) { uri ->
+        runCatching { DocumentsContract.getTreeDocumentId(Uri.parse(uri)) }.getOrNull()
+    }
+
+    private fun keysOf(entries: Set<String>): Set<String> = entries.mapNotNull(::folderKey).toSet()
+
+    private fun treesOf(entries: Set<String>): Set<Uri> =
+        entries.filter { it.startsWith("content://") }.map(Uri::parse).toSet()
+
+    private suspend fun scanFolders() {
+        val music = musicTrees
+        val video = videoTrees
+        _scannedSongs.value = withContext(Dispatchers.IO) { runCatching { scanner.scanAudio(music) }.getOrDefault(emptyList()) }
+        _scannedVideos.value = withContext(Dispatchers.IO) { runCatching { scanner.scanVideos(video) }.getOrDefault(emptyList()) }
+    }
+
+    private fun mergeSongs(indexed: List<AudioTrack>, scanned: List<AudioTrack>): List<AudioTrack> {
+        if (scanned.isEmpty()) return indexed
+        val known = indexed.mapTo(HashSet()) { mediaDedupeKey(it.location, it.fileName) }
+        return indexed + scanned.filter { mediaDedupeKey(it.location, it.fileName) !in known }
+    }
+
+    private fun mergeVideos(indexed: List<VideoItem>, scanned: List<VideoItem>): List<VideoItem> {
+        if (scanned.isEmpty()) return indexed
+        val known = indexed.mapTo(HashSet()) { mediaDedupeKey(it.location, it.fileName) }
+        return indexed + scanned.filter { mediaDedupeKey(it.location, it.fileName) !in known }
+    }
 
     /** Mount path of every storage volume, keyed like folder keys ("primary", "1A2B-3C4D"). */
     private val volumeRoots: Map<String, String> by lazy {
@@ -81,6 +139,7 @@ class MediaRepository(private val context: Context, settings: SettingsRepository
             val videos = withContext(Dispatchers.IO) { runCatching { queryVideos() }.getOrDefault(emptyList()) }
             _songs.value = songs
             _videos.value = videos
+            scanFolders()
             _isLoading.value = false
         }
     }
@@ -211,6 +270,7 @@ class MediaRepository(private val context: Context, settings: SettingsRepository
                     dateAdded = c.getLong(dateCol),
                     location = locationOf(c),
                     filePath = filePathOf(c),
+                    fileName = c.getString(nameCol).orEmpty(),
                 )
             }
         }
@@ -259,6 +319,7 @@ class MediaRepository(private val context: Context, settings: SettingsRepository
                     dateAdded = c.getLong(dateCol),
                     location = locationOf(c),
                     filePath = filePathOf(c),
+                    fileName = c.getString(nameCol).orEmpty(),
                 )
             }
         }

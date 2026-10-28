@@ -18,6 +18,8 @@ data class AudioTrack(
     val location: String = "",
     /** Absolute file path when MediaStore reports one (fallback for the folder filter). */
     val filePath: String = "",
+    /** File name with extension, used to merge MediaStore and directly scanned results. */
+    val fileName: String = "",
 )
 
 data class VideoItem(
@@ -35,6 +37,8 @@ data class VideoItem(
     val location: String = "",
     /** Absolute file path when MediaStore reports one (fallback for the folder filter). */
     val filePath: String = "",
+    /** File name with extension, used to merge MediaStore and directly scanned results. */
+    val fileName: String = "",
 )
 
 data class Album(

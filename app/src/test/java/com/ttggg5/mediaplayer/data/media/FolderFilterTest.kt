@@ -79,3 +79,35 @@ class FolderPathFallbackTest {
         assertEquals("primary:Music/", locationKey("external", "Music/"))
     }
 }
+
+class DirectScanHelpersTest {
+    @Test
+    fun mediaKindUsesMimeThenExtension() {
+        assertEquals(MediaKind.VIDEO, mediaKindOf("a.mp4", "video/mp4"))
+        assertEquals(MediaKind.AUDIO, mediaKindOf("a.webm", "audio/webm"))
+        assertEquals(MediaKind.VIDEO, mediaKindOf("clip.MKV", "application/octet-stream"))
+        assertEquals(MediaKind.AUDIO, mediaKindOf("song.opus", null))
+        assertNull(mediaKindOf("notes.txt", "text/plain"))
+        assertNull(mediaKindOf(".nomedia", null))
+    }
+
+    @Test
+    fun parentFolderOfDocument() {
+        assertEquals("75D7-DC5F:A68B2F8F/V/", parentFolderKeyOfDocId("75D7-DC5F:A68B2F8F/V/x.mp4"))
+        assertEquals("primary:", parentFolderKeyOfDocId("primary:top.mp3"))
+        assertEquals("primary:Documents/", parentFolderKeyOfDocId("home:a.mp3"))
+    }
+
+    @Test
+    fun entriesAreTreeUrisOrLegacyKeys() {
+        val uri = "content://com.android.externalstorage.documents/tree/75D7-DC5F%3AA68B2F8F%2FV"
+        assertEquals("75D7-DC5F:A68B2F8F/V/", folderEntryKey(uri) { "75D7-DC5F:A68B2F8F/V" })
+        assertEquals("primary:Music/", folderEntryKey("primary:Music/") { null })
+        assertNull(folderEntryKey(uri) { null })
+    }
+
+    @Test
+    fun dedupeKeyIgnoresCase() {
+        assertEquals(mediaDedupeKey("primary:Music/", "A.mp3"), mediaDedupeKey("PRIMARY:music/", "a.MP3"))
+    }
+}

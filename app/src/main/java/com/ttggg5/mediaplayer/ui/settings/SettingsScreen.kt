@@ -107,8 +107,12 @@ fun SettingsScreen(container: AppContainer, onBack: () -> Unit) {
             }
 
             Section("Library")
-            ClickRow(Icons.Rounded.LibraryMusic, "Music folders", folderSummary(musicFolders)) { picker = "musicFolders" }
-            ClickRow(Icons.Rounded.VideoLibrary, "Video folders", folderSummary(videoFolders)) { picker = "videoFolders" }
+            ClickRow(Icons.Rounded.LibraryMusic, "Music folders", folderSummary(musicFolders, media::folderKey)) {
+                picker = "musicFolders"
+            }
+            ClickRow(Icons.Rounded.VideoLibrary, "Video folders", folderSummary(videoFolders, media::folderKey)) {
+                picker = "videoFolders"
+            }
             SwitchRow(
                 Icons.Rounded.MusicOff,
                 "Hide short audio",
@@ -161,10 +165,14 @@ fun SettingsScreen(container: AppContainer, onBack: () -> Unit) {
             FolderDialog(
                 title = if (video) "Video folders" else "Music folders",
                 folders = if (video) videoFolders else musicFolders,
-                countFor = { key ->
-                    val folder = setOf(key)
-                    if (video) allVideos.count { media.inFolders(it.location, it.filePath, folder) }
-                    else allSongs.count { media.inFolders(it.location, it.filePath, folder) }
+                keyOf = media::folderKey,
+                countFor = { entry ->
+                    val folder = setOfNotNull(media.folderKey(entry))
+                    when {
+                        folder.isEmpty() -> 0
+                        video -> allVideos.count { media.inFolders(it.location, it.filePath, folder) }
+                        else -> allSongs.count { media.inFolders(it.location, it.filePath, folder) }
+                    }
                 },
                 itemLabel = if (video) "videos" else "songs",
                 onAdd = { scope.launch { settings.addFolder(video, it) } },
@@ -175,9 +183,9 @@ fun SettingsScreen(container: AppContainer, onBack: () -> Unit) {
     }
 }
 
-private fun folderSummary(folders: Set<String>): String = when (folders.size) {
+private fun folderSummary(folders: Set<String>, keyOf: (String) -> String?): String = when (folders.size) {
     0 -> "All folders"
-    1 -> com.ttggg5.mediaplayer.data.media.folderLabel(folders.first())
+    1 -> keyOf(folders.first())?.let(com.ttggg5.mediaplayer.data.media::folderLabel) ?: "1 folder"
     else -> "${folders.size} folders"
 }
 

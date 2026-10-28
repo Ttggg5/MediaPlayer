@@ -1,5 +1,7 @@
 package com.ttggg5.mediaplayer.ui.settings
 
+import android.content.Intent
+import android.net.Uri
 import android.provider.DocumentsContract
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -28,12 +30,18 @@ import com.ttggg5.mediaplayer.data.media.EXTERNAL_STORAGE_AUTHORITY
 import com.ttggg5.mediaplayer.data.media.folderLabel
 import com.ttggg5.mediaplayer.data.media.treeDocIdToFolderKey
 
+private fun labelOf(entry: String, keyOf: (String) -> String?): String =
+    keyOf(entry)?.let(::folderLabel) ?: "Unknown folder"
+
 /** Lists the chosen library folders, with a system folder picker to add more. */
 @Composable
 fun FolderDialog(
     title: String,
+    /** Saved entries: folder picker tree URIs, or folder keys saved by older versions. */
     folders: Set<String>,
-    /** Number of scanned files inside a folder, shown under it so empty picks are obvious. */
+    /** Folder key of an entry, used for its label. */
+    keyOf: (String) -> String?,
+    /** Number of files found inside an entry, shown under it so empty picks are obvious. */
     countFor: (String) -> Int,
     itemLabel: String,
     onAdd: (String) -> Unit,
@@ -49,7 +57,11 @@ fun FolderDialog(
             null
         }
         if (key != null) {
-            onAdd(key)
+            // Keep read access so the folder can be scanned directly, even where MediaStore does not look.
+            runCatching {
+                context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            onAdd(uri.toString())
         } else {
             Toast.makeText(context, "Choose a folder on the phone's storage or SD card", Toast.LENGTH_LONG).show()
         }
@@ -70,19 +82,34 @@ fun FolderDialog(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 LazyColumn(Modifier.heightIn(max = 320.dp)) {
-                    items(folders.sortedBy { folderLabel(it).lowercase() }, key = { it }) { key ->
+                    items(folders.sortedBy { labelOf(it, keyOf).lowercase() }, key = { it }) { entry ->
+                        val legacy = !entry.startsWith("content://")
                         ListItem(
                             leadingContent = { Icon(Icons.Rounded.Folder, null) },
-                            headlineContent = { Text(folderLabel(key), maxLines = 2, overflow = TextOverflow.Ellipsis) },
+                            headlineContent = { Text(labelOf(entry, keyOf), maxLines = 2, overflow = TextOverflow.Ellipsis) },
                             supportingContent = {
-                                val count = countFor(key)
+                                val count = countFor(entry)
                                 Text(
-                                    if (count == 0) "No $itemLabel found here" else "$count $itemLabel",
+                                    when {
+                                        count > 0 -> "$count $itemLabel"
+                                        legacy -> "Remove and add this folder again so it can be read directly"
+                                        else -> "No $itemLabel found here"
+                                    },
                                     color = if (count == 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             },
                             trailingContent = {
-                                IconButton(onClick = { onRemove(key) }) { Icon(Icons.Rounded.Close, "Remove") }
+                                IconButton(onClick = {
+                                    if (!legacy) {
+                                        runCatching {
+                                            context.contentResolver.releasePersistableUriPermission(
+                                                Uri.parse(entry),
+                                                Intent.FLAG_GRANT_READ_URI_PERMISSION,
+                                            )
+                                        }
+                                    }
+                                    onRemove(entry)
+                                }) { Icon(Icons.Rounded.Close, "Remove") }
                             },
                         )
                     }

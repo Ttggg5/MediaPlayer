@@ -75,3 +75,39 @@ private fun normalizedVolume(volume: String): String = when (volume.lowercase())
     "primary", "external_primary", "external", "emulated", "0" -> "primary"
     else -> volume.uppercase()
 }
+
+enum class MediaKind { AUDIO, VIDEO }
+
+private val AudioExtensions = setOf("mp3", "m4a", "aac", "flac", "ogg", "oga", "opus", "wav", "wma", "amr", "mka")
+private val VideoExtensions = setOf("mp4", "m4v", "mkv", "webm", "avi", "mov", "3gp", "ts", "m2ts", "wmv", "flv")
+
+/** Audio or video, judged by MIME type and, when that is generic or missing, by file extension. */
+fun mediaKindOf(fileName: String, mimeType: String?): MediaKind? {
+    val mime = mimeType?.lowercase().orEmpty()
+    // .webm and .mka can be audio-only, but MIME types report them as video; trust a specific audio MIME first.
+    if (mime.startsWith("audio/")) return MediaKind.AUDIO
+    if (mime.startsWith("video/")) return MediaKind.VIDEO
+    return when (fileName.substringAfterLast('.', "").lowercase()) {
+        in AudioExtensions -> MediaKind.AUDIO
+        in VideoExtensions -> MediaKind.VIDEO
+        else -> null
+    }
+}
+
+/** Folder key of the folder that contains a document ("75D7-DC5F:A/V/x.mp4" → "75D7-DC5F:A/V/"). */
+fun parentFolderKeyOfDocId(docId: String): String? {
+    val path = docId.substringAfter(':', missingDelimiterValue = "")
+    val parentId = if ('/' in path) docId.substringBeforeLast('/') else docId.substringBefore(':') + ":"
+    return treeDocIdToFolderKey(parentId)
+}
+
+/**
+ * Saved folder entries are either a folder picker tree URI (new, readable directly) or a bare
+ * folder key (saved by older versions). [treeDocId] extracts the document id from a tree URI.
+ */
+fun folderEntryKey(entry: String, treeDocId: (String) -> String?): String? =
+    if (entry.startsWith("content://")) treeDocId(entry)?.let(::treeDocIdToFolderKey) else entry
+
+/** Identity of a file for merging MediaStore results with directly scanned ones. */
+fun mediaDedupeKey(location: String, fileName: String): String =
+    location.lowercase() + "|" + fileName.lowercase()
