@@ -11,7 +11,7 @@ plugins {
 val appVersion = (findProperty("appVersion") as String?)?.removePrefix("v") ?: "1.0.0"
 val appVersionCode = appVersion.split('.', '-').take(3).map { it.toIntOrNull() ?: 0 }
     .let { parts -> (parts + List(3) { 0 }).take(3) }
-    .let { (major, minor, patch) -> major * 10_000 + minor * 100 + patch }
+    .let { (major, minor, patch) -> major * 1_000_000 + minor * 10_000 + patch }
 
 // Release signing: environment variables (CI) or an untracked keystore.properties (local builds).
 val keystoreProps = Properties().apply {

@@ -64,14 +64,7 @@ Release APKs are signed with one fixed key so new versions install over old ones
 
 With the secrets set, every push also uploads a signed `media-player-release` artifact.
 
-To publish a release that the app's updater will offer:
-
-```bash
-git tag v1.0.1
-git push origin v1.0.1
-```
-
-The `Release` workflow builds the APK with that version and attaches it to a GitHub Release.
+Every push to the default branch is published automatically as a GitHub Release named `v1.0.<commit count>`, with the signed `MediaPlayer-<version>.apk` attached. The in-app updater offers the latest one. To bump the major/minor version, change `VERSION_BASE` in `.github/workflows/android.yml`.
 
 For local release builds, create an untracked `keystore.properties` in the project root with `storeFile`, `storePassword`, `keyAlias` and `keyPassword`, then run `./gradlew assembleRelease -PappVersion=1.0.1`.
 

@@ -65,7 +65,13 @@ class UpdateManager(private val context: Context) {
                         else -> UpdateState.UpToDate
                     }
                 },
-                onFailure = { if (quiet) UpdateState.Idle else UpdateState.Failed(it.message ?: "Couldn't check for updates") },
+                onFailure = {
+                    when {
+                        quiet -> UpdateState.Idle
+                        it is NoReleasesException -> UpdateState.Failed("No releases have been published yet")
+                        else -> UpdateState.Failed(it.message ?: "Couldn't check for updates")
+                    }
+                },
             )
         }
     }
@@ -116,7 +122,7 @@ class UpdateManager(private val context: Context) {
         try {
             when (connection.responseCode) {
                 HttpURLConnection.HTTP_OK -> Unit
-                HttpURLConnection.HTTP_NOT_FOUND -> return null // No releases published yet.
+                HttpURLConnection.HTTP_NOT_FOUND -> throw NoReleasesException()
                 else -> error("GitHub returned HTTP ${connection.responseCode}")
             }
             val json = JSONObject(connection.inputStream.bufferedReader().use { it.readText() })
@@ -175,6 +181,8 @@ class UpdateManager(private val context: Context) {
         }
         return target
     }
+
+    private class NoReleasesException : Exception("No releases have been published yet")
 
     companion object {
         const val REPO_URL = "https://github.com/Ttggg5/MediaPlayer"
