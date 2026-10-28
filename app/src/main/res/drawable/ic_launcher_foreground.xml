@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Rounded play triangle with a music note accent. -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M42,34.5C42,31.4 45.3,29.5 48,31L74,46.5C76.6,48 76.6,51.8 74,53.3L48,68.8C45.3,70.3 42,68.4 42,65.3Z" />
+    <path
+        android:fillColor="#E8DEF8"
+        android:pathData="M33,62L33,77.5A5.5,5.5 0,1 1,29 72.2L29,58L39,55.5L39,59.5Z" />
+</vector>
