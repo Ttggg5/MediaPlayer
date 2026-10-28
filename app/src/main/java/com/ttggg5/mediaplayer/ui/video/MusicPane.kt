@@ -3,17 +3,21 @@
 package com.ttggg5.mediaplayer.ui.video
 
 import android.widget.Toast
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.GraphicEq
@@ -22,16 +26,18 @@ import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material.icons.rounded.SkipPrevious
+import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.FilledTonalIconToggleButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
@@ -50,6 +56,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -66,8 +74,6 @@ import com.ttggg5.mediaplayer.ui.music.SongActions
 import com.ttggg5.mediaplayer.ui.music.TrackList
 import kotlinx.coroutines.delay
 
-private val Tabs = listOf("Songs", "Queue")
-
 /** Music player shown next to a video in split mode, with a volume mix for both. */
 @Composable
 fun MusicPane(container: AppContainer, videoPlayer: ExoPlayer, modifier: Modifier = Modifier) {
@@ -78,6 +84,7 @@ fun MusicPane(container: AppContainer, videoPlayer: ExoPlayer, modifier: Modifie
     val songs by library.songs.collectAsStateWithLifecycle()
     val query by library.musicQuery.collectAsStateWithLifecycle()
     var tab by rememberSaveable { mutableIntStateOf(0) }
+    var mixerOpen by rememberSaveable { mutableStateOf(false) }
 
     val actions = remember(music) {
         SongActions(
@@ -94,42 +101,41 @@ fun MusicPane(container: AppContainer, videoPlayer: ExoPlayer, modifier: Modifie
 
     Surface(modifier, color = MaterialTheme.colorScheme.surface) {
         Column(Modifier.fillMaxSize()) {
-            NowPlayingCard(state, music)
-            MixRow(state, music, videoPlayer)
-            PrimaryTabRow(selectedTabIndex = tab) {
-                Tabs.forEachIndexed { index, title ->
-                    Tab(selected = tab == index, onClick = { tab = index }, text = { Text(title) })
+            Surface(color = MaterialTheme.colorScheme.surfaceContainer) {
+                Column {
+                    NowPlayingCard(state, music, mixerOpen, onToggleMixer = { mixerOpen = !mixerOpen })
+                    AnimatedVisibility(visible = mixerOpen) { Mixer(state, music, videoPlayer) }
                 }
+            }
+            PrimaryTabRow(selectedTabIndex = tab, containerColor = MaterialTheme.colorScheme.surface) {
+                Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text("Songs") })
+                Tab(
+                    selected = tab == 1,
+                    onClick = { tab = 1 },
+                    text = { Text(if (state.queue.isEmpty()) "Queue" else "Queue · ${state.queue.size}") },
+                )
             }
             Box(Modifier.weight(1f).fillMaxWidth()) {
                 if (tab == 0) {
                     Column {
-                        OutlinedTextField(
-                            value = query,
-                            onValueChange = library::setMusicQuery,
-                            placeholder = { Text("Search songs") },
-                            leadingIcon = { Icon(Icons.Rounded.Search, null) },
-                            trailingIcon = {
-                                if (query.isNotEmpty()) {
-                                    IconButton(onClick = { library.setMusicQuery("") }) { Icon(Icons.Rounded.Close, "Clear") }
-                                }
-                            },
-                            singleLine = true,
-                            shape = RoundedCornerShape(16.dp),
-                            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
-                        )
+                        Row(
+                            Modifier.fillMaxWidth().padding(start = 12.dp, end = 4.dp, top = 8.dp, bottom = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            SearchField(query, library::setMusicQuery, Modifier.weight(1f))
+                            IconButton(onClick = { music.playTracks(songs, shuffle = true) }, enabled = songs.isNotEmpty()) {
+                                Icon(Icons.Rounded.Shuffle, "Shuffle all")
+                            }
+                        }
                         if (songs.isEmpty()) {
-                            Text(
-                                "No songs found",
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(16.dp),
-                            )
+                            EmptyText(if (query.isBlank()) "No songs found" else "No songs match \"$query\"")
                         } else {
                             TrackList(
                                 tracks = songs,
                                 currentMediaId = state.currentItem?.mediaId,
                                 music = music,
                                 actions = actions,
+                                showPlayButtons = false,
                             )
                         }
                     }
@@ -142,7 +148,7 @@ fun MusicPane(container: AppContainer, videoPlayer: ExoPlayer, modifier: Modifie
 }
 
 @Composable
-private fun NowPlayingCard(state: MusicState, music: MusicController) {
+private fun NowPlayingCard(state: MusicState, music: MusicController, mixerOpen: Boolean, onToggleMixer: () -> Unit) {
     var position by remember { mutableLongStateOf(0L) }
     var dragging by remember { mutableStateOf(false) }
     var dragValue by remember { mutableFloatStateOf(0f) }
@@ -153,9 +159,9 @@ private fun NowPlayingCard(state: MusicState, music: MusicController) {
         } while (state.isPlaying)
     }
 
-    Column(Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
+    Column(Modifier.padding(start = 12.dp, end = 4.dp, top = 8.dp, bottom = if (state.currentItem == null) 8.dp else 0.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Artwork(state.artworkUri, Modifier.size(48.dp), shape = RoundedCornerShape(10.dp))
+            Artwork(state.artworkUri, Modifier.size(44.dp), shape = RoundedCornerShape(10.dp))
             Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
                 Text(
                     state.title.ifEmpty { "Nothing playing" },
@@ -164,28 +170,34 @@ private fun NowPlayingCard(state: MusicState, music: MusicController) {
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
-                    state.artist.ifEmpty { "Pick a song below" },
+                    state.artist.ifEmpty { "Choose a song below" },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-            IconButton(onClick = music::previous) { Icon(Icons.Rounded.SkipPrevious, "Previous") }
-            FilledIconButton(onClick = music::togglePlay) {
-                Icon(
-                    if (state.isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
-                    if (state.isPlaying) "Pause music" else "Play music",
-                )
+            if (state.currentItem != null) {
+                IconButton(onClick = music::previous) { Icon(Icons.Rounded.SkipPrevious, "Previous") }
+                FilledIconButton(onClick = music::togglePlay) {
+                    Icon(
+                        if (state.isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+                        if (state.isPlaying) "Pause music" else "Play music",
+                    )
+                }
+                IconButton(onClick = music::next) { Icon(Icons.Rounded.SkipNext, "Next") }
             }
-            IconButton(onClick = music::next) { Icon(Icons.Rounded.SkipNext, "Next") }
+            FilledTonalIconToggleButton(checked = mixerOpen, onCheckedChange = { onToggleMixer() }) {
+                Icon(Icons.Rounded.Tune, "Volume mix")
+            }
         }
         if (state.currentItem != null) {
             val duration = state.durationMs.coerceAtLeast(1L)
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.padding(end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     formatDuration(if (dragging) (dragValue * duration).toLong() else position),
                     style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Slider(
                     value = if (dragging) dragValue else (position.toFloat() / duration).coerceIn(0f, 1f),
@@ -198,7 +210,11 @@ private fun NowPlayingCard(state: MusicState, music: MusicController) {
                     },
                     modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
                 )
-                Text(formatDuration(state.durationMs), style = MaterialTheme.typography.labelSmall)
+                Text(
+                    formatDuration(state.durationMs),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         }
     }
@@ -206,38 +222,72 @@ private fun NowPlayingCard(state: MusicState, music: MusicController) {
 
 /** Separate volume sliders for the video and the music, so the two can be mixed. */
 @Composable
-private fun MixRow(state: MusicState, music: MusicController, videoPlayer: ExoPlayer) {
+private fun Mixer(state: MusicState, music: MusicController, videoPlayer: ExoPlayer) {
     var videoVolume by remember { mutableFloatStateOf(videoPlayer.volume) }
     var musicVolume by remember { mutableFloatStateOf(state.volume) }
     LaunchedEffect(state.volume) { musicVolume = state.volume }
 
-    Row(
-        Modifier.fillMaxWidth().padding(horizontal = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(Icons.Rounded.Movie, "Video volume", Modifier.size(20.dp))
-        Slider(
-            value = videoVolume,
-            onValueChange = { videoVolume = it; videoPlayer.volume = it },
-            modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
-        )
-        Icon(Icons.Rounded.MusicNote, "Music volume", Modifier.size(20.dp))
-        Slider(
-            value = musicVolume,
-            onValueChange = { musicVolume = it; music.setVolume(it) },
-            modifier = Modifier.weight(1f).padding(start = 8.dp),
+    Column(Modifier.padding(horizontal = 16.dp).padding(bottom = 8.dp)) {
+        VolumeRow(Icons.Rounded.Movie, "Video", videoVolume) { videoVolume = it; videoPlayer.volume = it }
+        VolumeRow(Icons.Rounded.MusicNote, "Music", musicVolume) { musicVolume = it; music.setVolume(it) }
+    }
+}
+
+@Composable
+private fun VolumeRow(icon: ImageVector, label: String, value: Float, onChange: (Float) -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Icon(icon, null, Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(label, style = MaterialTheme.typography.labelLarge, modifier = Modifier.width(56.dp).padding(start = 8.dp))
+        Slider(value = value, onValueChange = onChange, modifier = Modifier.weight(1f))
+        Text(
+            "${(value * 100).toInt()}%",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.width(44.dp).padding(start = 8.dp),
         )
     }
+}
+
+/** Compact pill-shaped search box. */
+@Composable
+private fun SearchField(query: String, onChange: (String) -> Unit, modifier: Modifier) {
+    Surface(modifier.height(40.dp), shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.surfaceContainerHigh) {
+        Row(Modifier.padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Rounded.Search, null, Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            Box(Modifier.weight(1f).padding(horizontal = 8.dp)) {
+                if (query.isEmpty()) {
+                    Text("Search songs", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
+                }
+                BasicTextField(
+                    value = query,
+                    onValueChange = onChange,
+                    singleLine = true,
+                    textStyle = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurface),
+                    cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+            if (query.isNotEmpty()) {
+                Icon(
+                    Icons.Rounded.Close,
+                    "Clear search",
+                    Modifier.size(20.dp).clickable { onChange("") },
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun EmptyText(text: String) {
+    Text(text, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(16.dp))
 }
 
 @Composable
 private fun QueueList(state: MusicState, music: MusicController) {
     if (state.queue.isEmpty()) {
-        Text(
-            "The queue is empty",
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(16.dp),
-        )
+        EmptyText("The queue is empty. Pick a song from the Songs tab.")
         return
     }
     LazyColumn(Modifier.fillMaxSize()) {

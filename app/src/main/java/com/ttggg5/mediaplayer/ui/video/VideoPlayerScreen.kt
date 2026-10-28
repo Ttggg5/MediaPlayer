@@ -34,6 +34,7 @@ import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PictureInPictureAlt
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Fullscreen
+import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.ScreenRotation
 import androidx.compose.material.icons.rounded.VerticalSplit
 import androidx.compose.material.icons.rounded.SkipNext
@@ -41,6 +42,8 @@ import androidx.compose.material.icons.rounded.SkipPrevious
 import androidx.compose.material.icons.rounded.Speed
 import androidx.compose.material.icons.rounded.Subtitles
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -131,6 +134,7 @@ fun VideoPlayerScreen(
     var scrubbing by remember { mutableStateOf(false) }
     var scrubValue by remember { mutableFloatStateOf(0f) }
     var dialog by remember { mutableStateOf<String?>(null) }
+    var menuOpen by remember { mutableStateOf(false) }
 
     DisposableEffect(player) {
         val listener = object : Player.Listener {
@@ -156,8 +160,8 @@ fun VideoPlayerScreen(
     }
 
     // Auto-hide the controls a few seconds after the last interaction while playing.
-    LaunchedEffect(controlsVisible, isPlaying, interaction, dialog) {
-        if (controlsVisible && isPlaying && dialog == null) {
+    LaunchedEffect(controlsVisible, isPlaying, interaction, dialog, menuOpen) {
+        if (controlsVisible && isPlaying && dialog == null && !menuOpen) {
             delay(3_500)
             controlsVisible = false
         }
@@ -300,36 +304,49 @@ fun VideoPlayerScreen(
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
                         )
-                        ControlIcon(Icons.Rounded.Audiotrack, "Audio track") { dialog = "audio"; touch() }
-                        ControlIcon(Icons.Rounded.Subtitles, "Subtitles") { dialog = "text"; touch() }
-                        ControlIcon(Icons.Rounded.Speed, "Playback speed") { dialog = "speed"; touch() }
-                        ControlIcon(Icons.Rounded.AspectRatio, "Resize: ${ResizeModes[resizeIndex].second}") {
-                            resizeIndex = (resizeIndex + 1) % ResizeModes.size
-                            indicator = GestureIndicator(Icons.Rounded.AspectRatio, ResizeModes[resizeIndex].second, null)
-                            touch()
-                        }
-                        if (host.pipSupported) {
-                            ControlIcon(Icons.Rounded.PictureInPictureAlt, "Picture in picture") { host.enterPip() }
-                        }
                         ControlIcon(
                             if (split) Icons.Rounded.Fullscreen else Icons.Rounded.VerticalSplit,
                             if (split) "Close music pane" else "Play music alongside",
                         ) { host.toggleSplit(); touch() }
-                        if (!split) {
-                            ControlIcon(Icons.Rounded.ScreenRotation, "Rotate") { host.toggleOrientation(); touch() }
+                        if (host.pipSupported) {
+                            ControlIcon(Icons.Rounded.PictureInPictureAlt, "Picture in picture") { host.enterPip() }
+                        }
+                        // Less-used options live in one menu to keep the bar readable.
+                        Box {
+                            ControlIcon(Icons.Rounded.MoreVert, "More options") { menuOpen = true; touch() }
+                            DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                                MenuRow(Icons.Rounded.Audiotrack, "Audio track") { menuOpen = false; dialog = "audio" }
+                                MenuRow(Icons.Rounded.Subtitles, "Subtitles") { menuOpen = false; dialog = "text" }
+                                MenuRow(Icons.Rounded.Speed, "Playback speed", "${player.playbackParameters.speed}x") {
+                                    menuOpen = false; dialog = "speed"
+                                }
+                                MenuRow(Icons.Rounded.AspectRatio, "Video size", ResizeModes[resizeIndex].second) {
+                                    resizeIndex = (resizeIndex + 1) % ResizeModes.size
+                                    indicator = GestureIndicator(Icons.Rounded.AspectRatio, ResizeModes[resizeIndex].second, null)
+                                }
+                                if (!split) {
+                                    MenuRow(Icons.Rounded.ScreenRotation, "Rotate screen") {
+                                        menuOpen = false; host.toggleOrientation()
+                                    }
+                                }
+                            }
                         }
                     }
 
                     // Center transport controls.
+                    // Smaller controls in split mode so they fit a short pane.
+                    val iconSize = if (split) 30 else 40
                     Row(
                         Modifier.align(Alignment.Center),
-                        horizontalArrangement = Arrangement.spacedBy(20.dp),
+                        horizontalArrangement = Arrangement.spacedBy(if (split) 8.dp else 20.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        ControlIcon(Icons.Rounded.SkipPrevious, "Previous", enabled = hasPrevious, size = 40) {
-                            player.seekToPreviousMediaItem(); touch()
+                        if (!split || hasPrevious) {
+                            ControlIcon(Icons.Rounded.SkipPrevious, "Previous", enabled = hasPrevious, size = iconSize) {
+                                player.seekToPreviousMediaItem(); touch()
+                            }
                         }
-                        ControlIcon(Icons.Rounded.FastRewind, "Back $stepLabel", size = 40) { seekBy(-seekStepMs); touch() }
+                        ControlIcon(Icons.Rounded.FastRewind, "Back $stepLabel", size = iconSize) { seekBy(-seekStepMs); touch() }
                         FilledIconButton(
                             onClick = {
                                 if (player.isPlaying) {
@@ -341,7 +358,7 @@ fun VideoPlayerScreen(
                                 }
                                 touch()
                             },
-                            modifier = Modifier.size(72.dp),
+                            modifier = Modifier.size(if (split) 56.dp else 72.dp),
                             colors = IconButtonDefaults.filledIconButtonColors(
                                 containerColor = Color.White.copy(alpha = 0.2f),
                                 contentColor = Color.White,
@@ -350,12 +367,14 @@ fun VideoPlayerScreen(
                             Icon(
                                 if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
                                 if (isPlaying) "Pause" else "Play",
-                                Modifier.size(44.dp),
+                                Modifier.size(if (split) 34.dp else 44.dp),
                             )
                         }
-                        ControlIcon(Icons.Rounded.FastForward, "Forward $stepLabel", size = 40) { seekBy(seekStepMs); touch() }
-                        ControlIcon(Icons.Rounded.SkipNext, "Next", enabled = hasNext, size = 40) {
-                            player.seekToNextMediaItem(); touch()
+                        ControlIcon(Icons.Rounded.FastForward, "Forward $stepLabel", size = iconSize) { seekBy(seekStepMs); touch() }
+                        if (!split || hasNext) {
+                            ControlIcon(Icons.Rounded.SkipNext, "Next", enabled = hasNext, size = iconSize) {
+                                player.seekToNextMediaItem(); touch()
+                            }
                         }
                     }
 
@@ -436,6 +455,16 @@ private fun ControlIcon(
             modifier = Modifier.size(size.dp),
         )
     }
+}
+
+@Composable
+private fun MenuRow(icon: ImageVector, label: String, value: String? = null, onClick: () -> Unit) {
+    DropdownMenuItem(
+        text = { Text(label) },
+        leadingIcon = { Icon(icon, null) },
+        trailingIcon = value?.let { { Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant) } },
+        onClick = onClick,
+    )
 }
 
 @Composable

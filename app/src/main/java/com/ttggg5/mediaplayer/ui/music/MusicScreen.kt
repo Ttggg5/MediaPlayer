@@ -144,10 +144,11 @@ fun TrackList(
     actions: SongActions,
     header: (@Composable () -> Unit)? = null,
     extraActions: List<ExtraSongAction> = emptyList(),
+    showPlayButtons: Boolean = true,
 ) {
     LazyColumn(contentPadding = PaddingValues(bottom = 16.dp)) {
         if (header != null) item { header() }
-        item {
+        if (showPlayButtons) item {
             Row(
                 Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
