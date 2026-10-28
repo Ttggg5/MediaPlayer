@@ -35,6 +35,9 @@ import androidx.compose.material.icons.rounded.PictureInPictureAlt
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Fullscreen
 import androidx.compose.material.icons.rounded.MoreVert
+import androidx.compose.material.icons.rounded.Repeat
+import androidx.compose.material.icons.rounded.RepeatOne
+import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.material.icons.rounded.ScreenRotation
 import androidx.compose.material.icons.rounded.VerticalSplit
 import androidx.compose.material.icons.rounded.SkipNext
@@ -124,6 +127,8 @@ fun VideoPlayerScreen(
     var position by remember { mutableLongStateOf(0L) }
     var hasNext by remember { mutableStateOf(false) }
     var hasPrevious by remember { mutableStateOf(false) }
+    var shuffle by remember { mutableStateOf(player.shuffleModeEnabled) }
+    var repeatMode by remember { mutableIntStateOf(player.repeatMode) }
     var tracks by remember { mutableStateOf(player.currentTracks) }
     var error by remember { mutableStateOf<String?>(null) }
 
@@ -143,6 +148,8 @@ fun VideoPlayerScreen(
                 title = p.mediaMetadata.title?.toString().orEmpty()
                 duration = p.duration.takeIf { it != C.TIME_UNSET }?.coerceAtLeast(0L) ?: 0L
                 hasNext = p.hasNextMediaItem()
+                shuffle = p.shuffleModeEnabled
+                repeatMode = p.repeatMode
                 hasPrevious = p.hasPreviousMediaItem()
                 tracks = p.currentTracks
                 error = p.playerError?.let { e -> e.localizedMessage ?: e.errorCodeName }
@@ -389,6 +396,15 @@ fun VideoPlayerScreen(
                     ) {
                         val dur = duration.coerceAtLeast(1L)
                         Row(verticalAlignment = Alignment.CenterVertically) {
+                            ToggleIcon(Icons.Rounded.Shuffle, "Shuffle", active = shuffle) {
+                                player.shuffleModeEnabled = !player.shuffleModeEnabled
+                                indicator = GestureIndicator(
+                                    Icons.Rounded.Shuffle,
+                                    if (player.shuffleModeEnabled) "Shuffle on" else "Shuffle off",
+                                    null,
+                                )
+                                touch()
+                            }
                             Text(
                                 formatDuration(if (scrubbing) (scrubValue * dur).toLong() else position),
                                 color = Color.White,
@@ -411,6 +427,24 @@ fun VideoPlayerScreen(
                                 modifier = Modifier.weight(1f).padding(horizontal = 12.dp),
                             )
                             Text(formatDuration(duration), color = Color.White, style = MaterialTheme.typography.labelMedium)
+                            ToggleIcon(
+                                if (repeatMode == Player.REPEAT_MODE_ONE) Icons.Rounded.RepeatOne else Icons.Rounded.Repeat,
+                                "Repeat",
+                                active = repeatMode != Player.REPEAT_MODE_OFF,
+                            ) {
+                                player.repeatMode = when (player.repeatMode) {
+                                    Player.REPEAT_MODE_OFF -> Player.REPEAT_MODE_ALL
+                                    Player.REPEAT_MODE_ALL -> Player.REPEAT_MODE_ONE
+                                    else -> Player.REPEAT_MODE_OFF
+                                }
+                                val label = when (player.repeatMode) {
+                                    Player.REPEAT_MODE_ALL -> "Repeat all"
+                                    Player.REPEAT_MODE_ONE -> "Repeat one"
+                                    else -> "Repeat off"
+                                }
+                                indicator = GestureIndicator(Icons.Rounded.Repeat, label, null)
+                                touch()
+                            }
                         }
                     }
                 }
@@ -453,6 +487,19 @@ private fun ControlIcon(
             description,
             tint = if (enabled) Color.White else Color.White.copy(alpha = 0.35f),
             modifier = Modifier.size(size.dp),
+        )
+    }
+}
+
+/** Small control that is tinted with the accent colour while its mode is on. */
+@Composable
+private fun ToggleIcon(icon: ImageVector, description: String, active: Boolean, onClick: () -> Unit) {
+    IconButton(onClick = onClick, modifier = Modifier.size(40.dp)) {
+        Icon(
+            icon,
+            if (active) "$description on" else "$description off",
+            tint = if (active) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.8f),
+            modifier = Modifier.size(22.dp),
         )
     }
 }

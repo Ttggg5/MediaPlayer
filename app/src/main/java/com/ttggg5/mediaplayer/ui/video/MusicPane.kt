@@ -25,6 +25,8 @@ import androidx.compose.material.icons.rounded.Movie
 import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Repeat
+import androidx.compose.material.icons.rounded.RepeatOne
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.material.icons.rounded.SkipNext
@@ -63,6 +65,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import com.ttggg5.mediaplayer.AppContainer
 import com.ttggg5.mediaplayer.playback.MusicController
@@ -193,7 +196,8 @@ private fun NowPlayingCard(state: MusicState, music: MusicController, mixerOpen:
         }
         if (state.currentItem != null) {
             val duration = state.durationMs.coerceAtLeast(1L)
-            Row(Modifier.padding(end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                ModeToggle(Icons.Rounded.Shuffle, "Shuffle", state.shuffle, music::toggleShuffle)
                 Text(
                     formatDuration(if (dragging) (dragValue * duration).toLong() else position),
                     style = MaterialTheme.typography.labelSmall,
@@ -215,8 +219,26 @@ private fun NowPlayingCard(state: MusicState, music: MusicController, mixerOpen:
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                ModeToggle(
+                    if (state.repeatMode == Player.REPEAT_MODE_ONE) Icons.Rounded.RepeatOne else Icons.Rounded.Repeat,
+                    "Repeat",
+                    state.repeatMode != Player.REPEAT_MODE_OFF,
+                    music::cycleRepeat,
+                )
             }
         }
+    }
+}
+
+@Composable
+private fun ModeToggle(icon: ImageVector, description: String, active: Boolean, onClick: () -> Unit) {
+    IconButton(onClick = onClick, modifier = Modifier.size(36.dp)) {
+        Icon(
+            icon,
+            if (active) "$description on" else "$description off",
+            tint = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(20.dp),
+        )
     }
 }
 

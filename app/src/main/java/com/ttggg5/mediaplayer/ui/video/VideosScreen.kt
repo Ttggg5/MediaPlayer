@@ -21,6 +21,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Movie
 import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.VideoLibrary
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -71,6 +72,10 @@ fun VideosScreen(vm: LibraryViewModel, onOpenSettings: () -> Unit) {
                     ascending = sort.ascending,
                     onChange = { field, asc -> vm.setVideoSort(SortSetting(field, asc)) },
                 )
+                IconButton(
+                    onClick = { VideoPlayerActivity.start(context, videos.map { it.uri }, videos.map { it.title }, 0, shuffle = true) },
+                    enabled = videos.isNotEmpty(),
+                ) { Icon(Icons.Rounded.Shuffle, "Shuffle play") }
                 IconButton(onClick = vm::refresh) { Icon(Icons.Rounded.Refresh, "Rescan") }
                 IconButton(onClick = onOpenSettings) { Icon(Icons.Rounded.Settings, "Settings") }
             }

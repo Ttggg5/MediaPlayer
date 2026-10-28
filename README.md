@@ -22,6 +22,7 @@ A modern Android media player for music and video, built with Kotlin, Jetpack Co
 - Full-screen player with custom Compose controls
 - Gestures: swipe on the left for brightness, swipe on the right for volume, swipe sideways to seek, double-tap to skip ±10 s
 - Audio track and subtitle selection, playback speed, fit/crop/stretch, rotation lock
+- Shuffle and repeat (all / one), plus a "shuffle play" button for the whole video library
 - Picture-in-picture (enters automatically on Android 12+ when you leave while playing)
 
 **Settings & updates**

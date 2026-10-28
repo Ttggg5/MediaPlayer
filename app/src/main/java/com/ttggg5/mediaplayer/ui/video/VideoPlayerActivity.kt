@@ -163,7 +163,9 @@ class VideoPlayerActivity : ComponentActivity(), VideoPlayerHost {
         val start: Int
         if (!uris.isNullOrEmpty()) {
             items = uris.mapIndexed { i, uri -> mediaItem(Uri.parse(uri), titles?.getOrNull(i)) }
-            start = intent.getIntExtra(EXTRA_INDEX, 0).coerceIn(0, items.lastIndex)
+            val shuffle = intent.getBooleanExtra(EXTRA_SHUFFLE, false)
+            player.shuffleModeEnabled = shuffle
+            start = if (shuffle) items.indices.random() else intent.getIntExtra(EXTRA_INDEX, 0).coerceIn(0, items.lastIndex)
         } else {
             val data = intent.data ?: run { finish(); return }
             items = listOf(mediaItem(data, intent.getStringExtra(EXTRA_SINGLE_TITLE) ?: displayName(data)))
@@ -313,6 +315,7 @@ class VideoPlayerActivity : ComponentActivity(), VideoPlayerHost {
         private const val EXTRA_URIS = "uris"
         private const val EXTRA_TITLES = "titles"
         private const val EXTRA_INDEX = "index"
+        private const val EXTRA_SHUFFLE = "shuffle"
         private const val EXTRA_SINGLE_TITLE = "title"
         private const val STATE_SPLIT = "split"
         private val VIDEO_AUDIO: AudioAttributes = AudioAttributes.Builder()
@@ -323,12 +326,14 @@ class VideoPlayerActivity : ComponentActivity(), VideoPlayerHost {
         private const val RESUME_MIN_MS = 3_000L
         private const val MAX_PIP_RATIO = 2.39f
 
-        fun start(context: Context, uris: List<Uri>, titles: List<String>, index: Int) {
+        /** Plays [uris] starting at [index], or in random order from a random video when [shuffle]. */
+        fun start(context: Context, uris: List<Uri>, titles: List<String>, index: Int, shuffle: Boolean = false) {
             context.startActivity(
                 Intent(context, VideoPlayerActivity::class.java)
                     .putStringArrayListExtra(EXTRA_URIS, ArrayList(uris.map(Uri::toString)))
                     .putStringArrayListExtra(EXTRA_TITLES, ArrayList(titles))
-                    .putExtra(EXTRA_INDEX, index),
+                    .putExtra(EXTRA_INDEX, index)
+                    .putExtra(EXTRA_SHUFFLE, shuffle),
             )
         }
 
