@@ -2,6 +2,17 @@
 
 package com.ttggg5.mediaplayer.ui.nowplaying
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.unit.IntOffset
+import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 import android.os.Build
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -97,7 +108,40 @@ fun NowPlayingScreen(state: MusicState, music: MusicController, onCollapse: () -
     val artScale by animateFloatAsState(if (state.isPlaying) 1f else 0.88f, label = "artScale")
     val scheme = MaterialTheme.colorScheme
 
-    Surface(Modifier.fillMaxSize(), color = scheme.surface) {
+    // Swipe down anywhere to close; the screen follows the finger and springs back if not far enough.
+    val scope = rememberCoroutineScope()
+    val dismissY = remember { Animatable(0f) }
+    val artX = remember { Animatable(0f) }
+    var pulse by remember { mutableStateOf<Boolean?>(null) }
+    LaunchedEffect(pulse) {
+        if (pulse != null) {
+            delay(600)
+            pulse = null
+        }
+    }
+
+    Surface(
+        Modifier
+            .fillMaxSize()
+            .offset { IntOffset(0, dismissY.value.roundToInt()) }
+            .pointerInput(Unit) {
+                detectVerticalDragGestures(
+                    onDragEnd = {
+                        if (dismissY.value > size.height * 0.25f) {
+                            onCollapse()
+                            scope.launch { dismissY.snapTo(0f) }
+                        } else {
+                            scope.launch { dismissY.animateTo(0f) }
+                        }
+                    },
+                    onDragCancel = { scope.launch { dismissY.animateTo(0f) } },
+                ) { change, dy ->
+                    change.consume()
+                    scope.launch { dismissY.snapTo((dismissY.value + dy).coerceAtLeast(0f)) }
+                }
+            },
+        color = scheme.surface,
+    ) {
         Box(Modifier.fillMaxSize()) {
             // Blurred artwork backdrop (blur is applied on Android 12+, a soft scrim covers older versions).
             if (state.artworkUri != null) {
@@ -119,10 +163,35 @@ fun NowPlayingScreen(state: MusicState, music: MusicController, onCollapse: () -
                 // Side by side on wide, short windows (tablets in landscape, unfolded foldables); stacked otherwise.
                 val twoPane = maxWidth >= 600.dp && maxWidth > maxHeight
                 val artwork: @Composable (Modifier) -> Unit = { modifier ->
-                    Box(modifier, contentAlignment = Alignment.Center) {
+                    Box(
+                        modifier.pointerInput(music) {
+                            // Swipe the cover sideways to skip; double-tap it to play/pause.
+                            val threshold = 96.dp.toPx()
+                            detectHorizontalDragGestures(
+                                onDragEnd = {
+                                    when {
+                                        artX.value < -threshold -> music.next()
+                                        artX.value > threshold -> music.previous()
+                                    }
+                                    scope.launch { artX.animateTo(0f) }
+                                },
+                                onDragCancel = { scope.launch { artX.animateTo(0f) } },
+                            ) { change, dx ->
+                                change.consume()
+                                scope.launch { artX.snapTo(artX.value + dx) }
+                            }
+                        }.pointerInput(music) {
+                            detectTapGestures(onDoubleTap = {
+                                pulse = true
+                                music.togglePlay()
+                            })
+                        },
+                        contentAlignment = Alignment.Center,
+                    ) {
                         Artwork(
                             state.artworkUri,
                             Modifier
+                                .offset { IntOffset(artX.value.roundToInt(), 0) }
                                 .widthIn(max = 520.dp)
                                 .aspectRatio(1f)
                                 .scale(artScale)
@@ -130,6 +199,15 @@ fun NowPlayingScreen(state: MusicState, music: MusicController, onCollapse: () -
                             shape = RoundedCornerShape(32.dp),
                             iconSize = 96.dp,
                         )
+                        if (pulse != null) {
+                            Surface(shape = CircleShape, color = Color.Black.copy(alpha = 0.5f), contentColor = Color.White) {
+                                Icon(
+                                    if (state.isPlaying) Icons.Rounded.PlayArrow else Icons.Rounded.Pause,
+                                    null,
+                                    Modifier.padding(16.dp).size(48.dp),
+                                )
+                            }
+                        }
                     }
                 }
                 val details: @Composable () -> Unit = {

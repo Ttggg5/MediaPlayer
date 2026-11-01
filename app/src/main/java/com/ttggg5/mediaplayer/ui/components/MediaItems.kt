@@ -1,5 +1,10 @@
 package com.ttggg5.mediaplayer.ui.components
 
+import androidx.compose.foundation.background
+import androidx.compose.material3.rememberSwipeToDismissBoxState
+import androidx.compose.material3.SwipeToDismissBoxValue
+import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -65,6 +70,9 @@ data class MediaItemUi(
     val trailing: String? = null,
     val highlighted: Boolean = false,
     val menu: List<MenuAction> = emptyList(),
+    /** Actions for swiping a row to the right / left (list and compact modes). */
+    val swipeRight: MenuAction? = null,
+    val swipeLeft: MenuAction? = null,
     val onClick: () -> Unit,
 )
 
@@ -87,7 +95,7 @@ fun MediaCollection(
             contentPadding = PaddingValues(bottom = 16.dp),
         ) {
             if (header != null) item(key = "header", span = { GridItemSpan(maxLineSpan) }) { header() }
-            items(items, key = { it.key }) { MediaRow(it, compact = mode == ViewMode.COMPACT) }
+            items(items, key = { it.key }) { SwipeableRow(it, compact = mode == ViewMode.COMPACT) }
         }
         ViewMode.GRID, ViewMode.LARGE_GRID -> LazyVerticalGrid(
             columns = GridCells.Adaptive(if (mode == ViewMode.GRID) 150.dp else 300.dp),
@@ -136,6 +144,52 @@ fun CollectionHeader(count: String, onPlayAll: (() -> Unit)? = null, onShuffle: 
 private fun ThumbShape.shape(small: Boolean): Shape = when (this) {
     ThumbShape.CIRCLE -> CircleShape
     else -> RoundedCornerShape(if (small) 8.dp else 12.dp)
+}
+
+/** A row that can be swiped right/left to run an action, then snaps back into place. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SwipeableRow(item: MediaItemUi, compact: Boolean) {
+    if (item.swipeRight == null && item.swipeLeft == null) {
+        MediaRow(item, compact)
+        return
+    }
+    val state = rememberSwipeToDismissBoxState(
+        confirmValueChange = { value ->
+            when (value) {
+                SwipeToDismissBoxValue.StartToEnd -> item.swipeRight?.onClick?.invoke()
+                SwipeToDismissBoxValue.EndToStart -> item.swipeLeft?.onClick?.invoke()
+                SwipeToDismissBoxValue.Settled -> Unit
+            }
+            false // Never dismiss: the row stays in the list.
+        },
+        positionalThreshold = { distance -> distance * 0.3f },
+    )
+    SwipeToDismissBox(
+        state = state,
+        enableDismissFromStartToEnd = item.swipeRight != null,
+        enableDismissFromEndToStart = item.swipeLeft != null,
+        backgroundContent = {
+            val towardsEnd = state.dismissDirection == SwipeToDismissBoxValue.StartToEnd
+            val action = if (towardsEnd) item.swipeRight else item.swipeLeft
+            Row(
+                Modifier
+                    .fillMaxSize()
+                    .background(MaterialTheme.colorScheme.secondaryContainer)
+                    .padding(horizontal = 24.dp),
+                horizontalArrangement = if (towardsEnd) Arrangement.Start else Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (action != null) {
+                    Icon(action.icon, null, tint = MaterialTheme.colorScheme.onSecondaryContainer)
+                    Spacer(Modifier.width(12.dp))
+                    Text(action.label, color = MaterialTheme.colorScheme.onSecondaryContainer, style = MaterialTheme.typography.labelLarge)
+                }
+            }
+        },
+    ) {
+        Surface(color = MaterialTheme.colorScheme.surface) { MediaRow(item, compact) }
+    }
 }
 
 @Composable

@@ -46,6 +46,8 @@ fun AudioTrack.toItem(
         trailing = formatDuration(durationMs),
         highlighted = isCurrent,
         menu = menu,
+        swipeRight = MenuAction("Play next", Icons.Rounded.SkipNext) { actions.onPlayNext(track) },
+        swipeLeft = MenuAction("Add to queue", Icons.AutoMirrored.Rounded.QueueMusic) { actions.onAddToQueue(track) },
         onClick = onClick,
     )
 }

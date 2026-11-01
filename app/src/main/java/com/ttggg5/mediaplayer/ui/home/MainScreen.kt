@@ -134,12 +134,7 @@ fun MainScreen(container: AppContainer, openNowPlayingRequests: Int) {
     val wide = isWideLayout()
     val miniPlayer: @Composable () -> Unit = {
         if (musicState.currentItem != null) {
-            MiniPlayer(
-                musicState,
-                music,
-                onExpand = { nowPlayingOpen = true },
-                modifier = if (wide) Modifier.widthIn(max = 720.dp) else Modifier,
-            )
+            MiniPlayer(musicState, music, onExpand = { nowPlayingOpen = true })
         }
     }
 

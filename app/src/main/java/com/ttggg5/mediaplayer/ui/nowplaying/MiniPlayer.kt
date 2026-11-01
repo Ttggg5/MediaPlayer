@@ -33,6 +33,19 @@ import com.ttggg5.mediaplayer.playback.MusicController
 import com.ttggg5.mediaplayer.playback.MusicState
 import com.ttggg5.mediaplayer.ui.components.Artwork
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import androidx.compose.animation.core.Animatable
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.layout.offset
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.IntOffset
+import kotlin.math.abs
+import kotlin.math.roundToInt
+
+private val SWIPE_THRESHOLD = 72.dp
 
 @Composable
 fun MiniPlayer(state: MusicState, music: MusicController, onExpand: () -> Unit, modifier: Modifier = Modifier) {
@@ -43,10 +56,43 @@ fun MiniPlayer(state: MusicState, music: MusicController, onExpand: () -> Unit, 
             delay(500)
         } while (state.isPlaying)
     }
+    // Swipe left/right to change song, swipe up to open Now Playing. The bar follows the finger.
+    val scope = rememberCoroutineScope()
+    val offsetX = remember { Animatable(0f) }
+    val offsetY = remember { Animatable(0f) }
+    val threshold = with(LocalDensity.current) { SWIPE_THRESHOLD.toPx() }
     Surface(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 8.dp, vertical = 4.dp)
+            .offset { IntOffset(offsetX.value.roundToInt(), offsetY.value.roundToInt()) }
+            .graphicsLayer { alpha = 1f - (abs(offsetX.value) / (threshold * 4)).coerceIn(0f, 0.5f) }
+            .pointerInput(music) {
+                detectDragGestures(
+                    onDragEnd = {
+                        val x = offsetX.value
+                        val y = offsetY.value
+                        when {
+                            y < -threshold && abs(y) > abs(x) -> onExpand()
+                            x < -threshold -> music.next()
+                            x > threshold -> music.previous()
+                        }
+                        scope.launch { offsetX.animateTo(0f) }
+                        scope.launch { offsetY.animateTo(0f) }
+                    },
+                    onDragCancel = {
+                        scope.launch { offsetX.animateTo(0f) }
+                        scope.launch { offsetY.animateTo(0f) }
+                    },
+                ) { change, drag ->
+                    change.consume()
+                    scope.launch {
+                        offsetX.snapTo(offsetX.value + drag.x)
+                        // Only upward movement, damped, so the bar stays put while scrolling sideways.
+                        offsetY.snapTo((offsetY.value + drag.y * 0.5f).coerceIn(-threshold * 1.5f, 0f))
+                    }
+                }
+            }
             .clip(RoundedCornerShape(20.dp))
             .clickable(onClick = onExpand),
         color = MaterialTheme.colorScheme.secondaryContainer,

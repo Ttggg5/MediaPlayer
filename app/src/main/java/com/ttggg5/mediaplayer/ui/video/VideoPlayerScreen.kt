@@ -1,5 +1,10 @@
 package com.ttggg5.mediaplayer.ui.video
 
+import kotlinx.coroutines.launch
+import androidx.compose.runtime.rememberCoroutineScope
+import android.os.SystemClock
+import androidx.compose.foundation.gestures.calculateZoom
+import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.annotation.OptIn
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -93,7 +98,7 @@ import kotlinx.coroutines.delay
 import java.util.Locale
 import kotlin.math.abs
 
-private enum class DragMode { NONE, SEEK, BRIGHTNESS, VOLUME }
+private enum class DragMode { NONE, SEEK, BRIGHTNESS, VOLUME, CLOSE }
 
 private data class GestureIndicator(val icon: ImageVector?, val text: String?, val level: Float?)
 
@@ -102,6 +107,9 @@ private val ResizeModes = listOf(
     AspectRatioFrameLayout.RESIZE_MODE_ZOOM to "Crop",
     AspectRatioFrameLayout.RESIZE_MODE_FILL to "Stretch",
 )
+
+private const val BOOST_DELAY_MS = 450L
+private const val CLOSE_FRACTION = 0.2f
 
 private val Speeds = listOf(0.25f, 0.5f, 0.75f, 1f, 1.25f, 1.5f, 1.75f, 2f)
 
@@ -140,6 +148,10 @@ fun VideoPlayerScreen(
     var scrubValue by remember { mutableFloatStateOf(0f) }
     var dialog by remember { mutableStateOf<String?>(null) }
     var menuOpen by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    var boosting by remember { mutableStateOf(false) }
+    var speedBeforeBoost by remember { mutableFloatStateOf(1f) }
+    var boostEndedAt by remember { mutableLongStateOf(0L) }
 
     DisposableEffect(player) {
         val listener = object : Player.Listener {
@@ -196,17 +208,80 @@ fun VideoPlayerScreen(
             Box(
                 Modifier
                     .fillMaxSize()
+                    .pointerInput(player, gesturesEnabled) {
+                        // Pinch: zoom in to crop/fill, out to fit. Only with two fingers; those events are
+                        // consumed so the one-finger drags below do not also react.
+                        if (!gesturesEnabled) return@pointerInput
+                        awaitEachGesture {
+                            var zoom = 1f
+                            var pinching = false
+                            do {
+                                val event = awaitPointerEvent()
+                                if (event.changes.count { it.pressed } >= 2) {
+                                    pinching = true
+                                    zoom *= event.calculateZoom()
+                                    event.changes.forEach { it.consume() }
+                                }
+                            } while (event.changes.any { it.pressed })
+                            if (pinching) {
+                                val target = when {
+                                    zoom > 1.15f -> 1 // Crop
+                                    zoom < 0.87f -> 0 // Fit
+                                    else -> resizeIndex
+                                }
+                                if (target != resizeIndex) {
+                                    resizeIndex = target
+                                    indicator = GestureIndicator(Icons.Rounded.AspectRatio, ResizeModes[target].second, null)
+                                }
+                            }
+                        }
+                    }
                     .pointerInput(player, gesturesEnabled, seekStepMs) {
                         if (gesturesEnabled) {
                             detectTapGestures(
-                                onTap = { controlsVisible = !controlsVisible; touch() },
+                                onPress = {
+                                    // Hold to play at 2x until the finger lifts.
+                                    val boost = scope.launch {
+                                        delay(BOOST_DELAY_MS)
+                                        if (player.isPlaying) {
+                                            speedBeforeBoost = player.playbackParameters.speed
+                                            player.setPlaybackSpeed(2f)
+                                            boosting = true
+                                        }
+                                    }
+                                    tryAwaitRelease()
+                                    boost.cancel()
+                                    if (boosting) {
+                                        player.setPlaybackSpeed(speedBeforeBoost)
+                                        boosting = false
+                                        boostEndedAt = SystemClock.uptimeMillis()
+                                    }
+                                },
+                                onTap = {
+                                    // A released hold is not a tap.
+                                    if (SystemClock.uptimeMillis() - boostEndedAt > 300) {
+                                        controlsVisible = !controlsVisible
+                                        touch()
+                                    }
+                                },
                                 onDoubleTap = { offset ->
-                                    if (offset.x < size.width / 2) {
-                                        seekBy(-seekStepMs)
-                                        indicator = GestureIndicator(Icons.Rounded.FastRewind, "-$stepLabel", null)
-                                    } else {
-                                        seekBy(seekStepMs)
-                                        indicator = GestureIndicator(Icons.Rounded.FastForward, "+$stepLabel", null)
+                                    when {
+                                        offset.x < size.width / 3f -> {
+                                            seekBy(-seekStepMs)
+                                            indicator = GestureIndicator(Icons.Rounded.FastRewind, "-$stepLabel", null)
+                                        }
+                                        offset.x > size.width * 2f / 3f -> {
+                                            seekBy(seekStepMs)
+                                            indicator = GestureIndicator(Icons.Rounded.FastForward, "+$stepLabel", null)
+                                        }
+                                        else -> {
+                                            if (player.isPlaying) player.pause() else player.play()
+                                            indicator = GestureIndicator(
+                                                if (player.isPlaying) Icons.Rounded.PlayArrow else Icons.Rounded.Pause,
+                                                null,
+                                                null,
+                                            )
+                                        }
                                     }
                                 },
                             )
@@ -224,6 +299,7 @@ fun VideoPlayerScreen(
                         var startLevel = 0f
                         fun finish() {
                             if (mode == DragMode.SEEK) player.seekTo(seekTarget)
+                            if (mode == DragMode.CLOSE && total.y > size.height * CLOSE_FRACTION) host.close()
                             mode = DragMode.NONE
                             indicator = null
                         }
@@ -239,10 +315,12 @@ fun VideoPlayerScreen(
                                 change.consume()
                                 total += amount
                                 if (mode == DragMode.NONE) {
+                                    // Left third: brightness, right third: volume, centre: swipe down to close.
                                     mode = when {
                                         abs(total.x) > abs(total.y) -> DragMode.SEEK
-                                        startX < size.width / 2 -> DragMode.BRIGHTNESS
-                                        else -> DragMode.VOLUME
+                                        startX < size.width / 3f -> DragMode.BRIGHTNESS
+                                        startX > size.width * 2f / 3f -> DragMode.VOLUME
+                                        else -> DragMode.CLOSE
                                     }
                                     startPosition = player.currentPosition
                                     startLevel = when (mode) {
@@ -274,6 +352,14 @@ fun VideoPlayerScreen(
                                         host.setVolume(level)
                                         indicator = GestureIndicator(Icons.AutoMirrored.Rounded.VolumeUp, null, level)
                                     }
+                                    DragMode.CLOSE -> {
+                                        val ready = total.y > size.height * CLOSE_FRACTION
+                                        indicator = GestureIndicator(
+                                            null,
+                                            if (ready) "Release to close" else "Swipe down to close",
+                                            null,
+                                        ).takeIf { total.y > 0 }
+                                    }
                                     DragMode.NONE -> Unit
                                 }
                             },
@@ -289,6 +375,12 @@ fun VideoPlayerScreen(
                     }
                 }
                 GestureIndicatorView(ind, Modifier.align(Alignment.Center))
+            }
+            if (boosting) {
+                GestureIndicatorView(
+                    GestureIndicator(Icons.Rounded.FastForward, "2×", null),
+                    Modifier.align(Alignment.TopCenter).safeDrawingPadding().padding(top = 24.dp),
+                )
             }
 
             AnimatedVisibility(visible = controlsVisible, enter = fadeIn(), exit = fadeOut()) {
