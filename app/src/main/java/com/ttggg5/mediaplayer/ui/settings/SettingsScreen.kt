@@ -2,6 +2,8 @@
 
 package com.ttggg5.mediaplayer.ui.settings
 
+import com.ttggg5.mediaplayer.ui.video.icon
+import com.ttggg5.mediaplayer.data.settings.SplitLayout
 import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.shape.CircleShape
@@ -80,6 +82,7 @@ fun SettingsScreen(container: AppContainer, onBack: () -> Unit) {
     val updateState by updates.state.collectAsStateWithLifecycle()
     var picker by remember { mutableStateOf<String?>(null) }
     val musicFolders by settings.musicFolders.collectAsStateWithLifecycle(initialValue = emptySet())
+    val splitLayout by settings.splitLayout.collectAsStateWithLifecycle(initialValue = SplitLayout.AUTO)
     val videoFolders by settings.videoFolders.collectAsStateWithLifecycle(initialValue = emptySet())
     val media = container.mediaRepository
     val allSongs by media.allSongs.collectAsStateWithLifecycle()
@@ -117,6 +120,7 @@ fun SettingsScreen(container: AppContainer, onBack: () -> Unit) {
                 SwitchRow(Icons.Rounded.History, "Resume playback", "Continue videos where you left off", current.resumeVideos) {
                     scope.launch { settings.setResumeVideos(it) }
                 }
+                ClickRow(splitLayout.icon, "Split screen layout", splitLayout.label) { picker = "split" }
             }
             SettingsGroup("Library") {
                 ClickRow(Icons.Rounded.LibraryMusic, "Music folders", folderSummary(musicFolders, media::folderKey)) {
@@ -174,6 +178,13 @@ fun SettingsScreen(container: AppContainer, onBack: () -> Unit) {
             selected = current.seekStepSeconds,
             onDismiss = { picker = null },
         ) { scope.launch { settings.setSeekStepSeconds(it) } }
+        "split" -> ChoiceDialog(
+            title = "Split screen layout",
+            options = SplitLayout.entries,
+            label = { it.label },
+            selected = splitLayout,
+            onDismiss = { picker = null },
+        ) { scope.launch { settings.setSplitLayout(it) } }
         "musicFolders", "videoFolders" -> {
             val video = picker == "videoFolders"
             FolderDialog(

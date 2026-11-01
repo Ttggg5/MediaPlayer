@@ -1,5 +1,12 @@
 package com.ttggg5.mediaplayer.ui.video
 
+import com.ttggg5.mediaplayer.data.settings.SplitLayout
+import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.AlignVerticalTop
+import androidx.compose.material.icons.rounded.AlignVerticalBottom
+import androidx.compose.material.icons.rounded.AlignHorizontalLeft
+import androidx.compose.material.icons.rounded.AlignHorizontalRight
+import androidx.compose.material.icons.rounded.AutoAwesomeMosaic
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.rememberCoroutineScope
 import android.os.SystemClock
@@ -108,6 +115,16 @@ private val ResizeModes = listOf(
     AspectRatioFrameLayout.RESIZE_MODE_FILL to "Stretch",
 )
 
+/** Icon showing where the music pane goes. */
+val SplitLayout.icon: ImageVector
+    get() = when (this) {
+        SplitLayout.AUTO -> Icons.Rounded.AutoAwesomeMosaic
+        SplitLayout.MUSIC_RIGHT -> Icons.Rounded.AlignHorizontalRight
+        SplitLayout.MUSIC_LEFT -> Icons.Rounded.AlignHorizontalLeft
+        SplitLayout.MUSIC_BOTTOM -> Icons.Rounded.AlignVerticalBottom
+        SplitLayout.MUSIC_TOP -> Icons.Rounded.AlignVerticalTop
+    }
+
 private const val BOOST_DELAY_MS = 450L
 private const val CLOSE_FRACTION = 0.2f
 
@@ -148,6 +165,7 @@ fun VideoPlayerScreen(
     var scrubValue by remember { mutableFloatStateOf(0f) }
     var dialog by remember { mutableStateOf<String?>(null) }
     var menuOpen by remember { mutableStateOf(false) }
+    var layoutMenuOpen by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     var boosting by remember { mutableStateOf(false) }
     var speedBeforeBoost by remember { mutableFloatStateOf(1f) }
@@ -179,8 +197,8 @@ fun VideoPlayerScreen(
     }
 
     // Auto-hide the controls a few seconds after the last interaction while playing.
-    LaunchedEffect(controlsVisible, isPlaying, interaction, dialog, menuOpen) {
-        if (controlsVisible && isPlaying && dialog == null && !menuOpen) {
+    LaunchedEffect(controlsVisible, isPlaying, interaction, dialog, menuOpen, layoutMenuOpen) {
+        if (controlsVisible && isPlaying && dialog == null && !menuOpen && !layoutMenuOpen) {
             delay(3_500)
             controlsVisible = false
         }
@@ -403,6 +421,24 @@ fun VideoPlayerScreen(
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
                         )
+                        if (split) {
+                            // Where the music pane goes: right, left, bottom, top or automatic.
+                            Box {
+                                ControlIcon(host.currentSplitLayout.icon, "Split layout") { layoutMenuOpen = true; touch() }
+                                DropdownMenu(expanded = layoutMenuOpen, onDismissRequest = { layoutMenuOpen = false }) {
+                                    SplitLayout.entries.forEach { option ->
+                                        DropdownMenuItem(
+                                            text = { Text(option.label) },
+                                            leadingIcon = { Icon(option.icon, null) },
+                                            trailingIcon = {
+                                                if (option == host.currentSplitLayout) Icon(Icons.Rounded.Check, "Selected")
+                                            },
+                                            onClick = { layoutMenuOpen = false; host.setSplitLayout(option) },
+                                        )
+                                    }
+                                }
+                            }
+                        }
                         ControlIcon(
                             if (split) Icons.Rounded.Fullscreen else Icons.Rounded.VerticalSplit,
                             if (split) "Close music pane" else "Play music alongside",

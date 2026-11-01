@@ -15,6 +15,7 @@ import android.provider.Settings
 import android.util.Rational
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.Lifecycle
@@ -33,6 +34,7 @@ import androidx.media3.common.VideoSize
 import androidx.media3.exoplayer.ExoPlayer
 import com.ttggg5.mediaplayer.MediaPlayerApp
 import com.ttggg5.mediaplayer.data.settings.AppSettings
+import com.ttggg5.mediaplayer.data.settings.SplitLayout
 import com.ttggg5.mediaplayer.ui.theme.MediaPlayerTheme
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -120,10 +122,14 @@ class VideoPlayerActivity : ComponentActivity(), VideoPlayerHost {
 
         setContent {
             val appSettings by settings.appSettings.collectAsStateWithLifecycle(initialValue = AppSettings())
+            val splitLayout by settings.splitLayout.collectAsStateWithLifecycle(initialValue = SplitLayout.AUTO)
+            SideEffect { currentSplitLayoutState.value = splitLayout }
             MediaPlayerTheme(darkTheme = true, dynamicColor = appSettings.dynamicColor) {
                 val split = splitMode.value && !inPictureInPicture.value
                 SplitPlayerLayout(
                     split = split,
+                    layout = splitLayout,
+                    onLayoutChange = ::setSplitLayout,
                     video = { modifier ->
                         VideoPlayerScreen(
                             player = player,
@@ -263,6 +269,13 @@ class VideoPlayerActivity : ComponentActivity(), VideoPlayerHost {
 
     override fun close() = finish()
 
+    private val currentSplitLayoutState = mutableStateOf(SplitLayout.AUTO)
+    override val currentSplitLayout: SplitLayout get() = currentSplitLayoutState.value
+
+    override fun setSplitLayout(layout: SplitLayout) {
+        lifecycleScope.launch { settings.setSplitLayout(layout) }
+    }
+
     override fun toggleSplit() {
         splitMode.value = !splitMode.value
         player.setAudioAttributes(VIDEO_AUDIO, /* handleAudioFocus = */ !splitMode.value)
@@ -356,6 +369,8 @@ interface VideoPlayerHost {
     fun enterPip()
     fun toggleOrientation()
     fun toggleSplit()
+    val currentSplitLayout: SplitLayout
+    fun setSplitLayout(layout: SplitLayout)
     fun getBrightness(): Float
     fun setBrightness(value: Float)
     fun getVolume(): Float

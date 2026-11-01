@@ -2,6 +2,7 @@ package com.ttggg5.mediaplayer.ui.video
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -30,6 +31,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import com.ttggg5.mediaplayer.data.settings.SplitLayout
 
 private const val MIN_FRACTION = 0.2f
 private const val MAX_FRACTION = 0.8f
@@ -38,11 +40,14 @@ private val TOUCH_THICKNESS = 28.dp
 
 /**
  * Shows [video] alone, or (when [split]) next to [other] with a draggable divider between them.
- * The panes stack vertically on tall screens and sit side by side on wide ones.
+ * [layout] decides where the music pane goes; [SplitLayout.AUTO] puts it beside the video on wide
+ * windows and below it on tall ones. Double-tapping the divider swaps the panes.
  */
 @Composable
 fun SplitPlayerLayout(
     split: Boolean,
+    layout: SplitLayout,
+    onLayoutChange: (SplitLayout) -> Unit,
     video: @Composable (Modifier) -> Unit,
     other: @Composable (Modifier) -> Unit,
 ) {
@@ -50,28 +55,46 @@ fun SplitPlayerLayout(
         video(Modifier.fillMaxSize())
         return
     }
+    // Share of the space given to the video, kept when the layout changes.
     var fraction by rememberSaveable { mutableFloatStateOf(0.45f) }
     BoxWithConstraints(Modifier.fillMaxSize().background(Color.Black)) {
-        val horizontal = maxWidth > maxHeight
-        val total = (if (horizontal) constraints.maxWidth else constraints.maxHeight).toFloat().coerceAtLeast(1f)
-        val dragHandle = Modifier.pointerInput(horizontal, total) {
-            detectDragGestures { change, drag ->
-                change.consume()
-                val delta = if (horizontal) drag.x else drag.y
-                fraction = (fraction + delta / total).coerceIn(MIN_FRACTION, MAX_FRACTION)
-            }
+        val horizontal = when (layout) {
+            SplitLayout.AUTO -> maxWidth > maxHeight
+            SplitLayout.MUSIC_LEFT, SplitLayout.MUSIC_RIGHT -> true
+            SplitLayout.MUSIC_TOP, SplitLayout.MUSIC_BOTTOM -> false
         }
+        val videoFirst = layout != SplitLayout.MUSIC_LEFT && layout != SplitLayout.MUSIC_TOP
+        val swapped = when {
+            horizontal && videoFirst -> SplitLayout.MUSIC_LEFT
+            horizontal -> SplitLayout.MUSIC_RIGHT
+            videoFirst -> SplitLayout.MUSIC_TOP
+            else -> SplitLayout.MUSIC_BOTTOM
+        }
+        val total = (if (horizontal) constraints.maxWidth else constraints.maxHeight).toFloat().coerceAtLeast(1f)
+        val dragHandle = Modifier
+            .pointerInput(horizontal, videoFirst, total) {
+                detectDragGestures { change, drag ->
+                    change.consume()
+                    val delta = (if (horizontal) drag.x else drag.y) / total
+                    // The divider follows the finger whichever side the video is on.
+                    fraction = (fraction + if (videoFirst) delta else -delta).coerceIn(MIN_FRACTION, MAX_FRACTION)
+                }
+            }
+            .pointerInput(swapped) { detectTapGestures(onDoubleTap = { onLayoutChange(swapped) }) }
+
+        val videoWeight = fraction
+        val otherWeight = 1f - fraction
         if (horizontal) {
             Row(Modifier.fillMaxSize()) {
-                video(Modifier.weight(fraction).fillMaxHeight())
+                if (videoFirst) video(Modifier.weight(videoWeight).fillMaxHeight()) else other(Modifier.weight(otherWeight).fillMaxHeight())
                 Divider(horizontal = true, dragHandle = dragHandle, modifier = Modifier.fillMaxHeight().width(BAR_THICKNESS))
-                other(Modifier.weight(1f - fraction).fillMaxHeight())
+                if (videoFirst) other(Modifier.weight(otherWeight).fillMaxHeight()) else video(Modifier.weight(videoWeight).fillMaxHeight())
             }
         } else {
             Column(Modifier.fillMaxSize()) {
-                video(Modifier.weight(fraction).fillMaxWidth())
+                if (videoFirst) video(Modifier.weight(videoWeight).fillMaxWidth()) else other(Modifier.weight(otherWeight).fillMaxWidth())
                 Divider(horizontal = false, dragHandle = dragHandle, modifier = Modifier.fillMaxWidth().height(BAR_THICKNESS))
-                other(Modifier.weight(1f - fraction).fillMaxWidth())
+                if (videoFirst) other(Modifier.weight(otherWeight).fillMaxWidth()) else video(Modifier.weight(videoWeight).fillMaxWidth())
             }
         }
     }

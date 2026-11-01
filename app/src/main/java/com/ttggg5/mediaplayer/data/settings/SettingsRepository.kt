@@ -22,6 +22,15 @@ data class SortSetting<T>(val field: T, val ascending: Boolean)
 /** How a library page lays out its items. */
 enum class ViewMode(val label: String) { LIST("List"), GRID("Grid"), COMPACT("Compact"), LARGE_GRID("Large") }
 
+/** Where the music pane goes in split-screen video playback. */
+enum class SplitLayout(val label: String) {
+    AUTO("Automatic"),
+    MUSIC_RIGHT("Music on the right"),
+    MUSIC_LEFT("Music on the left"),
+    MUSIC_BOTTOM("Music at the bottom"),
+    MUSIC_TOP("Music at the top"),
+}
+
 enum class ThemeMode(val label: String) { SYSTEM("System default"), LIGHT("Light"), DARK("Dark") }
 
 data class AppSettings(
@@ -84,6 +93,12 @@ class SettingsRepository(private val context: Context) {
     val videoViewMode: Flow<ViewMode> = context.dataStore.data.map { prefs ->
         prefs[VIDEO_VIEW]?.let { runCatching { ViewMode.valueOf(it) }.getOrNull() } ?: ViewMode.GRID
     }
+
+    val splitLayout: Flow<SplitLayout> = context.dataStore.data.map { prefs ->
+        prefs[SPLIT_LAYOUT]?.let { runCatching { SplitLayout.valueOf(it) }.getOrNull() } ?: SplitLayout.AUTO
+    }
+
+    suspend fun setSplitLayout(layout: SplitLayout) = context.dataStore.edit { it[SPLIT_LAYOUT] = layout.name }
 
     /** Whether the Folders tab shows the real folder tree instead of a flat folder list. */
     val musicFolderTree: Flow<Boolean> = context.dataStore.data.map { it[MUSIC_TREE] ?: false }
@@ -165,6 +180,7 @@ class SettingsRepository(private val context: Context) {
         val MUSIC_VIEW = stringPreferencesKey("music_view_mode")
         val VIDEO_VIEW = stringPreferencesKey("video_view_mode")
         val MUSIC_TREE = booleanPreferencesKey("music_folder_tree")
+        val SPLIT_LAYOUT = stringPreferencesKey("split_layout")
         val VIDEO_TREE = booleanPreferencesKey("video_folder_tree")
         val VIDEO_FOLDERS = stringSetPreferencesKey("video_folders")
     }
