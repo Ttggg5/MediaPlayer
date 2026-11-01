@@ -2,160 +2,179 @@
 
 package com.ttggg5.mediaplayer.ui.video
 
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
+import android.content.Context
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.GridItemSpan
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.itemsIndexed
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.material.icons.rounded.Movie
-import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Shuffle
-import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.VideoLibrary
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.ttggg5.mediaplayer.data.media.VideoItem
 import com.ttggg5.mediaplayer.data.media.VideoSort
 import com.ttggg5.mediaplayer.data.settings.SortSetting
+import com.ttggg5.mediaplayer.data.settings.ViewMode
 import com.ttggg5.mediaplayer.ui.LibraryViewModel
-import com.ttggg5.mediaplayer.ui.components.Artwork
+import com.ttggg5.mediaplayer.ui.components.CollectionHeader
 import com.ttggg5.mediaplayer.ui.components.EmptyState
+import com.ttggg5.mediaplayer.ui.components.LibraryPage
+import com.ttggg5.mediaplayer.ui.components.MediaCollection
+import com.ttggg5.mediaplayer.ui.components.MediaItemUi
 import com.ttggg5.mediaplayer.ui.components.ScreenScaffold
-import com.ttggg5.mediaplayer.ui.components.SearchTopBar
-import com.ttggg5.mediaplayer.ui.components.SortMenuButton
+import com.ttggg5.mediaplayer.ui.components.ThumbShape
+import com.ttggg5.mediaplayer.ui.components.ViewOptionsSheet
 import com.ttggg5.mediaplayer.ui.components.formatDuration
 import com.ttggg5.mediaplayer.ui.components.formatSize
+import com.ttggg5.mediaplayer.ui.music.countLabel
+
+private val Tabs = listOf("Videos", "Folders")
 
 @Composable
-fun VideosScreen(vm: LibraryViewModel, onOpenSettings: () -> Unit) {
+fun VideosScreen(vm: LibraryViewModel, onOpenFolder: (String) -> Unit, onOpenSettings: () -> Unit) {
     val context = LocalContext.current
     val videos by vm.videos.collectAsStateWithLifecycle()
     val folders by vm.videoFolders.collectAsStateWithLifecycle()
-    val selectedFolder by vm.videoFolder.collectAsStateWithLifecycle()
     val query by vm.videoQuery.collectAsStateWithLifecycle()
     val sort by vm.videoSort.collectAsStateWithLifecycle()
     val loading by vm.isLoading.collectAsStateWithLifecycle()
+    val mode by vm.videoViewMode.collectAsStateWithLifecycle()
+    var tab by rememberSaveable { mutableIntStateOf(0) }
+    var showOptions by remember { mutableStateOf(false) }
 
+    LibraryPage(
+        title = "Videos",
+        query = query,
+        onQueryChange = vm::setVideoQuery,
+        searchPlaceholder = "Search videos",
+        tabs = Tabs,
+        selectedTab = tab,
+        onTabSelected = { tab = it },
+        loading = loading,
+        onShuffle = { playVideos(context, videos, 0, shuffle = true) },
+        shuffleEnabled = videos.isNotEmpty(),
+        onViewOptions = { showOptions = true },
+        onOpenSettings = onOpenSettings,
+    ) {
+        when {
+            videos.isEmpty() ->
+                EmptyState(Icons.Rounded.VideoLibrary, "No videos found", "Videos on your device will show up here.")
+            tab == 0 -> VideoList(videos, mode)
+            else -> MediaCollection(
+                items = folders.map { folder ->
+                    MediaItemUi(
+                        key = folder.path,
+                        title = folder.name,
+                        subtitle = countLabel(folder.videos.size, "video"),
+                        artwork = folder.videos.first().uri,
+                        shape = ThumbShape.WIDE,
+                        placeholder = Icons.Rounded.Folder,
+                        onClick = { onOpenFolder(folder.path) },
+                    )
+                },
+                mode = mode,
+                header = { CollectionHeader(countLabel(folders.size, "folder")) },
+            )
+        }
+    }
+
+    if (showOptions) {
+        ViewOptionsSheet(
+            mode = mode,
+            onModeChange = { vm.setViewMode(video = true, it) },
+            sortOptions = VideoSort.entries,
+            sortLabel = { it.label },
+            sort = sort.field,
+            ascending = sort.ascending,
+            onSortChange = { field, asc -> vm.setVideoSort(SortSetting(field, asc)) },
+            onRescan = vm::refresh,
+            onDismiss = { showOptions = false },
+        )
+    }
+}
+
+/** Videos of one folder, with the same layout as the Videos tab. */
+@Composable
+fun VideoFolderScreen(vm: LibraryViewModel, path: String, onBack: () -> Unit) {
+    val all by vm.allVideos.collectAsStateWithLifecycle()
+    val sort by vm.videoSort.collectAsStateWithLifecycle()
+    val mode by vm.videoViewMode.collectAsStateWithLifecycle()
+    val videos = remember(all, sort, path) { vm.videoFolder(path) }
+    val context = LocalContext.current
     ScreenScaffold(
         topBar = { scroll ->
-            SearchTopBar("Videos", query, vm::setVideoQuery, scroll, placeholder = "Search videos") {
-                SortMenuButton(
-                    options = VideoSort.entries,
-                    label = { it.label },
-                    selected = sort.field,
-                    ascending = sort.ascending,
-                    onChange = { field, asc -> vm.setVideoSort(SortSetting(field, asc)) },
-                )
-                IconButton(
-                    onClick = { VideoPlayerActivity.start(context, videos.map { it.uri }, videos.map { it.title }, 0, shuffle = true) },
-                    enabled = videos.isNotEmpty(),
-                ) { Icon(Icons.Rounded.Shuffle, "Shuffle play") }
-                IconButton(onClick = vm::refresh) { Icon(Icons.Rounded.Refresh, "Rescan") }
-                IconButton(onClick = onOpenSettings) { Icon(Icons.Rounded.Settings, "Settings") }
-            }
+            TopAppBar(
+                title = {
+                    Text(videos.firstOrNull()?.folderName ?: path.substringAfterLast('/'), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                },
+                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back") } },
+                actions = {
+                    IconButton(onClick = { playVideos(context, videos, 0, shuffle = true) }, enabled = videos.isNotEmpty()) {
+                        Icon(Icons.Rounded.Shuffle, "Shuffle play")
+                    }
+                },
+                scrollBehavior = scroll,
+            )
         },
     ) { padding ->
-        Column(Modifier.padding(padding).fillMaxSize()) {
-            if (loading) LinearProgressIndicator(Modifier.fillMaxWidth())
-            if (videos.isEmpty() && selectedFolder == null) {
-                EmptyState(Icons.Rounded.VideoLibrary, "No videos found", "Videos on your device will show up here.")
-            } else LazyVerticalGrid(
-                columns = GridCells.Adaptive(170.dp),
-                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp),
-            ) {
-                if (folders.size > 1) {
-                    item(span = { GridItemSpan(maxLineSpan) }) {
-                        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            item {
-                                FilterChip(
-                                    selected = selectedFolder == null,
-                                    onClick = { vm.setVideoFolder(null) },
-                                    label = { Text("All") },
-                                )
-                            }
-                            items(folders, key = { it.first }) { (path, name) ->
-                                FilterChip(
-                                    selected = selectedFolder == path,
-                                    onClick = { vm.setVideoFolder(path) },
-                                    label = { Text(name) },
-                                )
-                            }
-                        }
-                    }
-                }
-                itemsIndexed(videos, key = { _, v -> v.id }) { index, video ->
-                    Column(
-                        Modifier.clickable {
-                            VideoPlayerActivity.start(context, videos.map { it.uri }, videos.map { it.title }, index)
-                        },
-                    ) {
-                        Box(Modifier.fillMaxWidth().aspectRatio(16f / 10f)) {
-                            Artwork(
-                                video.uri,
-                                Modifier.fillMaxSize(),
-                                shape = RoundedCornerShape(16.dp),
-                                icon = Icons.Rounded.Movie,
-                                iconSize = 40.dp,
-                            )
-                            Surface(
-                                color = Color.Black.copy(alpha = 0.6f),
-                                contentColor = Color.White,
-                                shape = RoundedCornerShape(8.dp),
-                                modifier = Modifier.align(Alignment.BottomEnd).padding(8.dp),
-                            ) {
-                                Text(
-                                    formatDuration(video.durationMs),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                                )
-                            }
-                        }
-                        Text(
-                            video.title,
-                            style = MaterialTheme.typography.titleSmall,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.padding(top = 8.dp),
-                        )
-                        Text(
-                            buildString {
-                                if (video.height > 0) append("${minOf(video.width, video.height)}p • ")
-                                append(formatSize(video.sizeBytes))
-                            },
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
+        Box(Modifier.padding(padding).fillMaxSize()) {
+            if (videos.isEmpty()) {
+                EmptyState(Icons.Rounded.VideoLibrary, "No videos here", "This folder has no videos right now.")
+            } else {
+                VideoList(videos, mode)
             }
         }
     }
+}
+
+@Composable
+private fun VideoList(videos: List<VideoItem>, mode: ViewMode) {
+    val context = LocalContext.current
+    MediaCollection(
+        items = videos.mapIndexed { index, video ->
+            MediaItemUi(
+                key = video.id,
+                title = video.title,
+                subtitle = buildString {
+                    if (video.height > 0) append("${minOf(video.width, video.height)}p · ")
+                    append(formatSize(video.sizeBytes))
+                },
+                artwork = video.uri,
+                shape = ThumbShape.WIDE,
+                placeholder = Icons.Rounded.Movie,
+                trailing = formatDuration(video.durationMs),
+                onClick = { playVideos(context, videos, index) },
+            )
+        },
+        mode = mode,
+        header = {
+            CollectionHeader(
+                count = countLabel(videos.size, "video"),
+                onPlayAll = { playVideos(context, videos, 0) },
+                onShuffle = { playVideos(context, videos, 0, shuffle = true) },
+            )
+        },
+    )
+}
+
+private fun playVideos(context: Context, videos: List<VideoItem>, index: Int, shuffle: Boolean = false) {
+    if (videos.isEmpty()) return
+    VideoPlayerActivity.start(context, videos.map { it.uri }, videos.map { it.title }, index, shuffle)
 }

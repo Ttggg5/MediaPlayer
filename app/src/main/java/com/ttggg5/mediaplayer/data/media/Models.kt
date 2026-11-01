@@ -56,6 +56,12 @@ data class Artist(
     val albumCount: Int get() = tracks.map { it.albumId }.distinct().size
 }
 
+data class VideoFolder(
+    val path: String,
+    val name: String,
+    val videos: List<VideoItem>,
+)
+
 data class Folder(
     val path: String,
     val name: String,

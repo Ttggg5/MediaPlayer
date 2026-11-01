@@ -4,6 +4,10 @@ A modern Android media player for music and video, built with Kotlin, Jetpack Co
 
 ## Features
 
+**Library pages**
+- Music and Videos share one layout: search, a "View & sort" sheet, shuffle and settings in the top bar, tabs, and a "N items · Shuffle · Play all" header
+- Four view modes, remembered per page: List, Compact, Grid and Large grid
+
 **Music**
 - Library scanned from the device (MediaStore): Songs, Albums, Artists and Folders tabs
 - Search, plus sorting by title, artist, album, date added or duration (remembered between launches)
@@ -18,7 +22,7 @@ A modern Android media player for music and video, built with Kotlin, Jetpack Co
 - Separate volume sliders mix the video and the music; the music pane can browse songs and edit the queue
 
 **Video**
-- Thumbnail grid with duration and resolution, folder filter chips, search and sorting
+- Videos and Folders tabs with thumbnails, duration and resolution, search and sorting
 - Full-screen player with custom Compose controls
 - Gestures: swipe on the left for brightness, swipe on the right for volume, swipe sideways to seek, double-tap to skip ±10 s
 - Audio track and subtitle selection, playback speed, fit/crop/stretch, rotation lock

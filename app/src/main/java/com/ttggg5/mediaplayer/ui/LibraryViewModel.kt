@@ -8,6 +8,7 @@ import com.ttggg5.mediaplayer.data.media.Artist
 import com.ttggg5.mediaplayer.data.media.AudioTrack
 import com.ttggg5.mediaplayer.data.media.Folder
 import com.ttggg5.mediaplayer.data.media.SongSort
+import com.ttggg5.mediaplayer.data.media.VideoFolder
 import com.ttggg5.mediaplayer.data.media.VideoItem
 import com.ttggg5.mediaplayer.data.media.VideoSort
 import com.ttggg5.mediaplayer.data.media.matches
@@ -18,6 +19,7 @@ import com.ttggg5.mediaplayer.data.media.toArtists
 import com.ttggg5.mediaplayer.data.media.toFolders
 import com.ttggg5.mediaplayer.data.settings.AppSettings
 import com.ttggg5.mediaplayer.data.settings.SortSetting
+import com.ttggg5.mediaplayer.data.settings.ViewMode
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -41,8 +43,11 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
     private val _videoQuery = MutableStateFlow("")
     val videoQuery: StateFlow<String> = _videoQuery.asStateFlow()
 
-    private val _videoFolder = MutableStateFlow<String?>(null)
-    val videoFolder: StateFlow<String?> = _videoFolder.asStateFlow()
+    val musicViewMode: StateFlow<ViewMode> =
+        settings.musicViewMode.stateIn(viewModelScope, SharingStarted.Eagerly, ViewMode.LIST)
+
+    val videoViewMode: StateFlow<ViewMode> =
+        settings.videoViewMode.stateIn(viewModelScope, SharingStarted.Eagerly, ViewMode.GRID)
 
     val songSort: StateFlow<SortSetting<SongSort>> =
         settings.songSort.stateIn(viewModelScope, SharingStarted.Eagerly, SortSetting(SongSort.TITLE, true))
@@ -67,16 +72,18 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
     val folders: StateFlow<List<Folder>> = songs.map { it.toFolders() }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
-    /** Folder (path to display name) choices for the video filter chips. */
-    val videoFolders: StateFlow<List<Pair<String, String>>> = media.videos.map { videos ->
-        videos.map { it.folderPath to it.folderName }.distinct().sortedBy { it.second.lowercase() }
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
-
     val videos: StateFlow<List<VideoItem>> =
-        combine(media.videos, _videoQuery, _videoFolder, videoSort) { all, query, folder, sort ->
-            all.filter { (folder == null || it.folderPath == folder) && (query.isBlank() || it.title.contains(query, true)) }
+        combine(media.videos, _videoQuery, videoSort) { all, query, sort ->
+            all.filter { query.isBlank() || it.title.contains(query, true) }
                 .sortVideos(sort.field, sort.ascending)
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** Videos grouped by folder, for the Videos › Folders tab. */
+    val videoFolders: StateFlow<List<VideoFolder>> = videos.map { list ->
+        list.groupBy { it.folderPath }
+            .map { (path, items) -> VideoFolder(path, items.first().folderName, items) }
+            .sortedBy { it.name.lowercase() }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     init {
         media.refreshIfNeeded()
@@ -85,7 +92,10 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
     fun refresh() = media.refresh()
     fun setMusicQuery(query: String) { _musicQuery.value = query }
     fun setVideoQuery(query: String) { _videoQuery.value = query }
-    fun setVideoFolder(path: String?) { _videoFolder.value = path }
+
+    fun setViewMode(video: Boolean, mode: ViewMode) {
+        viewModelScope.launch { settings.setViewMode(video, mode) }
+    }
 
     fun setSongSort(setting: SortSetting<SongSort>) {
         viewModelScope.launch { settings.setSongSort(setting) }
@@ -100,6 +110,14 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
 
     fun artist(name: String): List<AudioTrack> =
         allSongs.value.filter { it.artist == name }.sortedWith(compareBy({ it.album.lowercase() }, { it.title.lowercase() }))
+
+    /** Videos of one folder, in the current video sort order. */
+    fun videoFolder(path: String): List<VideoItem> {
+        val sort = videoSort.value
+        return media.videos.value.filter { it.folderPath == path }.sortVideos(sort.field, sort.ascending)
+    }
+
+    val allVideos: StateFlow<List<VideoItem>> = media.videos
 
     fun folder(path: String): List<AudioTrack> =
         allSongs.value.filter { it.folderPath == path }.sortedBy { it.title.lowercase() }

@@ -29,6 +29,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.ttggg5.mediaplayer.data.media.AudioTrack
+import com.ttggg5.mediaplayer.data.settings.ViewMode
 import com.ttggg5.mediaplayer.playback.MusicController
 import com.ttggg5.mediaplayer.ui.components.Artwork
 import com.ttggg5.mediaplayer.ui.components.EmptyState
@@ -47,6 +48,7 @@ fun TrackCollectionScreen(
     onBack: () -> Unit,
     extraActions: List<ExtraSongAction> = emptyList(),
     topBarActions: @Composable RowScope.() -> Unit = {},
+    mode: ViewMode = ViewMode.LIST,
 ) {
     val state by music.state.collectAsStateWithLifecycle()
     ScreenScaffold(
@@ -71,6 +73,7 @@ fun TrackCollectionScreen(
                     music = music,
                     actions = songActions,
                     extraActions = extraActions,
+                    mode = mode,
                     header = {
                         Column(
                             Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 8.dp),

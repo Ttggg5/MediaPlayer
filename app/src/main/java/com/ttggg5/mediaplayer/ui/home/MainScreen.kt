@@ -66,6 +66,7 @@ import com.ttggg5.mediaplayer.ui.playlists.PlaylistsViewModel
 import com.ttggg5.mediaplayer.ui.settings.SettingsScreen
 import com.ttggg5.mediaplayer.ui.settings.UpdateDialog
 import com.ttggg5.mediaplayer.ui.stream.StreamScreen
+import com.ttggg5.mediaplayer.ui.video.VideoFolderScreen
 import com.ttggg5.mediaplayer.ui.video.VideosScreen
 
 private data class Destination(val route: String, val label: String, val icon: ImageVector)
@@ -82,6 +83,7 @@ fun MainScreen(container: AppContainer, openNowPlayingRequests: Int) {
     val context = LocalContext.current
     val music = container.musicController
     val library: LibraryViewModel = viewModel { LibraryViewModel(container) }
+    val musicMode by library.musicViewMode.collectAsStateWithLifecycle()
     val playlists: PlaylistsViewModel = viewModel { PlaylistsViewModel(container) }
     val musicState by music.state.collectAsStateWithLifecycle()
     val nav = rememberNavController()
@@ -142,7 +144,16 @@ fun MainScreen(container: AppContainer, openNowPlayingRequests: Int) {
                         onOpenSettings = openSettings,
                     )
                 }
-                composable("videos") { VideosScreen(library, onOpenSettings = openSettings) }
+                composable("videos") {
+                    VideosScreen(
+                        library,
+                        onOpenFolder = { nav.navigate("videoFolder/${Uri.encode(it)}") },
+                        onOpenSettings = openSettings,
+                    )
+                }
+                composable("videoFolder/{path}") { entry ->
+                    VideoFolderScreen(library, entry.arguments?.getString("path").orEmpty(), onBack = { nav.popBackStack() })
+                }
                 composable("playlists") {
                     PlaylistsScreen(playlists, onOpen = { nav.navigate("playlist/$it") }, onOpenSettings = openSettings)
                 }
@@ -169,6 +180,7 @@ fun MainScreen(container: AppContainer, openNowPlayingRequests: Int) {
                         music = music,
                         songActions = songActions,
                         onBack = { nav.popBackStack() },
+                        mode = musicMode,
                     )
                 }
                 composable("artist/{name}") { entry ->
@@ -184,6 +196,7 @@ fun MainScreen(container: AppContainer, openNowPlayingRequests: Int) {
                         music = music,
                         songActions = songActions,
                         onBack = { nav.popBackStack() },
+                        mode = musicMode,
                     )
                 }
                 composable("folder/{path}") { entry ->
@@ -199,11 +212,12 @@ fun MainScreen(container: AppContainer, openNowPlayingRequests: Int) {
                         music = music,
                         songActions = songActions,
                         onBack = { nav.popBackStack() },
+                        mode = musicMode,
                     )
                 }
                 composable("playlist/{id}", arguments = listOf(navArgument("id") { type = NavType.LongType })) { entry ->
                     val id = entry.arguments?.getLong("id") ?: 0L
-                    PlaylistDetailRoute(id, playlists, music, songActions, onBack = { nav.popBackStack() })
+                    PlaylistDetailRoute(id, playlists, music, songActions, onBack = { nav.popBackStack() }, mode = musicMode)
                 }
             }
         }
@@ -233,6 +247,7 @@ private fun PlaylistDetailRoute(
     music: com.ttggg5.mediaplayer.playback.MusicController,
     songActions: SongActions,
     onBack: () -> Unit,
+    mode: com.ttggg5.mediaplayer.data.settings.ViewMode,
 ) {
     val detailFlow = remember(id) { vm.detail(id) }
     val detail: PlaylistDetail? by detailFlow.collectAsStateWithLifecycle(initialValue = null)
@@ -254,6 +269,7 @@ private fun PlaylistDetailRoute(
                 current.entries.firstOrNull { it.second.id == track.id }?.let { vm.removeEntry(it.first.entryId) }
             },
         ),
+        mode = mode,
         topBarActions = {
             IconButton(onClick = { renaming = true }) { Icon(Icons.Rounded.Edit, "Rename") }
             IconButton(onClick = { deleting = true }) { Icon(Icons.Rounded.Delete, "Delete") }
@@ -283,6 +299,7 @@ private fun BottomBar(nav: NavHostController) {
     val selectedTab = when {
         currentRoute == null -> "music"
         currentRoute.startsWith("playlist/") -> "playlists"
+        currentRoute.startsWith("videoFolder/") -> "videos"
         currentRoute == "settings" -> ""
         currentRoute.contains("/") -> "music"
         else -> currentRoute

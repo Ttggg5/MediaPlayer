@@ -19,6 +19,9 @@ private val Context.dataStore by preferencesDataStore(name = "settings")
 
 data class SortSetting<T>(val field: T, val ascending: Boolean)
 
+/** How a library page lays out its items. */
+enum class ViewMode(val label: String) { LIST("List"), GRID("Grid"), COMPACT("Compact"), LARGE_GRID("Large") }
+
 enum class ThemeMode(val label: String) { SYSTEM("System default"), LIGHT("Light"), DARK("Dark") }
 
 data class AppSettings(
@@ -73,6 +76,18 @@ class SettingsRepository(private val context: Context) {
     suspend fun setResumeVideos(enabled: Boolean) = context.dataStore.edit { it[RESUME_VIDEOS] = enabled }
     suspend fun setHideShortAudio(enabled: Boolean) = context.dataStore.edit { it[HIDE_SHORT_AUDIO] = enabled }
     suspend fun setAutoCheckUpdates(enabled: Boolean) = context.dataStore.edit { it[AUTO_CHECK_UPDATES] = enabled }
+
+    val musicViewMode: Flow<ViewMode> = context.dataStore.data.map { prefs ->
+        prefs[MUSIC_VIEW]?.let { runCatching { ViewMode.valueOf(it) }.getOrNull() } ?: ViewMode.LIST
+    }
+
+    val videoViewMode: Flow<ViewMode> = context.dataStore.data.map { prefs ->
+        prefs[VIDEO_VIEW]?.let { runCatching { ViewMode.valueOf(it) }.getOrNull() } ?: ViewMode.GRID
+    }
+
+    suspend fun setViewMode(video: Boolean, mode: ViewMode) = context.dataStore.edit {
+        it[if (video) VIDEO_VIEW else MUSIC_VIEW] = mode.name
+    }
 
     /** Library folder keys ("volumeId:path/") to scan for music; empty means all folders. */
     val musicFolders: Flow<Set<String>> = context.dataStore.data.map { it[MUSIC_FOLDERS].orEmpty() }
@@ -139,6 +154,8 @@ class SettingsRepository(private val context: Context) {
         val HIDE_SHORT_AUDIO = booleanPreferencesKey("hide_short_audio")
         val AUTO_CHECK_UPDATES = booleanPreferencesKey("auto_check_updates")
         val MUSIC_FOLDERS = stringSetPreferencesKey("music_folders")
+        val MUSIC_VIEW = stringPreferencesKey("music_view_mode")
+        val VIDEO_VIEW = stringPreferencesKey("video_view_mode")
         val VIDEO_FOLDERS = stringSetPreferencesKey("video_folders")
     }
 }

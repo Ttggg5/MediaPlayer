@@ -30,7 +30,7 @@ import java.util.Locale
 /** Artwork with an icon placeholder underneath that shows when no image is available. */
 @Composable
 fun Artwork(
-    uri: Uri?,
+    uri: Any?,
     modifier: Modifier = Modifier,
     shape: Shape = RoundedCornerShape(12.dp),
     icon: ImageVector = Icons.Rounded.MusicNote,
