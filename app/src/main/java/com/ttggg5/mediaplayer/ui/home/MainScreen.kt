@@ -90,6 +90,7 @@ import com.ttggg5.mediaplayer.ui.playlists.PlaylistsScreen
 import com.ttggg5.mediaplayer.ui.playlists.PlaylistsViewModel
 import com.ttggg5.mediaplayer.ui.settings.SettingsScreen
 import com.ttggg5.mediaplayer.ui.settings.UpdateDialog
+import com.ttggg5.mediaplayer.ui.components.CrashReportDialog
 import com.ttggg5.mediaplayer.ui.stream.StreamScreen
 import com.ttggg5.mediaplayer.ui.video.VideoFolderScreen
 import com.ttggg5.mediaplayer.ui.video.VideosScreen
@@ -288,6 +289,7 @@ fun MainScreen(container: AppContainer, openNowPlayingRequests: Int) {
     BackHandler(enabled = nowPlayingOpen && musicState.currentItem != null && !docked) { nowPlayingOpen = false }
 
     UpdateDialog(updateState, container.updateManager)
+    CrashReportDialog()
 
     addToPlaylist?.let { tracks ->
         AddToPlaylistDialog(playlists, tracks, onDismiss = { addToPlaylist = null })

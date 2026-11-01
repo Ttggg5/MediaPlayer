@@ -165,15 +165,22 @@ class VideoPlayerActivity : ComponentActivity(), VideoPlayerHost {
     }
 
     private fun load(intent: Intent) {
-        val uris = intent.getStringArrayListExtra(EXTRA_URIS)
-        val titles = intent.getStringArrayListExtra(EXTRA_TITLES)
+        // The play list is handed over in memory: putting thousands of URIs in the Intent would
+        // exceed Android's ~1 MB transaction limit and crash. If the process was restarted the
+        // list is gone, so fall back to the single video that was tapped.
+        val token = intent.getLongExtra(EXTRA_QUEUE_TOKEN, 0L)
+        val queue = pendingQueue?.takeIf { token != 0L && it.first == token }?.second
+        val fallbackUri = intent.getStringExtra(EXTRA_START_URI)
         val items: List<MediaItem>
         val start: Int
-        if (!uris.isNullOrEmpty()) {
-            items = uris.mapIndexed { i, uri -> mediaItem(Uri.parse(uri), titles?.getOrNull(i)) }
+        if (!queue.isNullOrEmpty()) {
+            items = queue.map { (uri, title) -> mediaItem(uri, title.ifBlank { null }) }
             val shuffle = intent.getBooleanExtra(EXTRA_SHUFFLE, false)
             player.shuffleModeEnabled = shuffle
             start = if (shuffle) items.indices.random() else intent.getIntExtra(EXTRA_INDEX, 0).coerceIn(0, items.lastIndex)
+        } else if (fallbackUri != null) {
+            items = listOf(mediaItem(Uri.parse(fallbackUri), intent.getStringExtra(EXTRA_SINGLE_TITLE)))
+            start = 0
         } else {
             val data = intent.data ?: run { finish(); return }
             items = listOf(mediaItem(data, intent.getStringExtra(EXTRA_SINGLE_TITLE) ?: displayName(data)))
@@ -327,8 +334,8 @@ class VideoPlayerActivity : ComponentActivity(), VideoPlayerHost {
     override val pipSupported: Boolean get() = supportsPip
 
     companion object {
-        private const val EXTRA_URIS = "uris"
-        private const val EXTRA_TITLES = "titles"
+        private const val EXTRA_QUEUE_TOKEN = "queue_token"
+        private const val EXTRA_START_URI = "start_uri"
         private const val EXTRA_INDEX = "index"
         private const val EXTRA_SHUFFLE = "shuffle"
         private const val EXTRA_SINGLE_TITLE = "title"
@@ -342,12 +349,20 @@ class VideoPlayerActivity : ComponentActivity(), VideoPlayerHost {
         private const val MAX_PIP_RATIO = 2.39f
 
         /** Plays [uris] starting at [index], or in random order from a random video when [shuffle]. */
+        /** Play list for the next start, kept in memory (see [load]); paired with a token. */
+        @Volatile private var pendingQueue: Pair<Long, List<Pair<Uri, String>>>? = null
+
         fun start(context: Context, uris: List<Uri>, titles: List<String>, index: Int, shuffle: Boolean = false) {
+            if (uris.isEmpty()) return
+            val token = System.nanoTime()
+            pendingQueue = token to uris.mapIndexed { i, uri -> uri to titles.getOrElse(i) { "" } }
+            val startIndex = index.coerceIn(0, uris.lastIndex)
             context.startActivity(
                 Intent(context, VideoPlayerActivity::class.java)
-                    .putStringArrayListExtra(EXTRA_URIS, ArrayList(uris.map(Uri::toString)))
-                    .putStringArrayListExtra(EXTRA_TITLES, ArrayList(titles))
-                    .putExtra(EXTRA_INDEX, index)
+                    .putExtra(EXTRA_QUEUE_TOKEN, token)
+                    .putExtra(EXTRA_START_URI, uris[startIndex].toString())
+                    .putExtra(EXTRA_SINGLE_TITLE, titles.getOrNull(startIndex))
+                    .putExtra(EXTRA_INDEX, startIndex)
                     .putExtra(EXTRA_SHUFFLE, shuffle),
             )
         }

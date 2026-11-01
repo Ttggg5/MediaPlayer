@@ -19,6 +19,7 @@ class MediaPlayerApp : Application(), ImageLoaderFactory {
 
     override fun onCreate() {
         super.onCreate()
+        CrashReporter.install(this)
         container = AppContainer(this)
     }
 
