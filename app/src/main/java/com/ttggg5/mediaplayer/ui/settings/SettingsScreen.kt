@@ -2,6 +2,8 @@
 
 package com.ttggg5.mediaplayer.ui.settings
 
+import androidx.compose.foundation.layout.wrapContentWidth
+import androidx.compose.foundation.layout.widthIn
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
@@ -86,7 +88,14 @@ fun SettingsScreen(container: AppContainer, onBack: () -> Unit) {
             )
         },
     ) { padding ->
-        Column(Modifier.padding(padding).fillMaxSize().verticalScroll(rememberScrollState())) {
+        Column(
+            Modifier
+                .padding(padding)
+                .fillMaxSize()
+                .wrapContentWidth()
+                .widthIn(max = 720.dp)
+                .verticalScroll(rememberScrollState()),
+        ) {
             Section("Appearance")
             ClickRow(Icons.Rounded.DarkMode, "Theme", current.themeMode.label) { picker = "theme" }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {

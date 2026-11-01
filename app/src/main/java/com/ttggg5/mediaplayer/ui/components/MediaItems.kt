@@ -13,12 +13,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -82,8 +80,13 @@ fun MediaCollection(
     header: (@Composable () -> Unit)? = null,
 ) {
     when (mode) {
-        ViewMode.LIST, ViewMode.COMPACT -> LazyColumn(modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 16.dp)) {
-            if (header != null) item(key = "header") { header() }
+        // Rows flow into several columns on wide screens (tablets, unfolded foldables); one column on phones.
+        ViewMode.LIST, ViewMode.COMPACT -> LazyVerticalGrid(
+            columns = GridCells.Adaptive(if (mode == ViewMode.COMPACT) 340.dp else 400.dp),
+            modifier = modifier.fillMaxSize(),
+            contentPadding = PaddingValues(bottom = 16.dp),
+        ) {
+            if (header != null) item(key = "header", span = { GridItemSpan(maxLineSpan) }) { header() }
             items(items, key = { it.key }) { MediaRow(it, compact = mode == ViewMode.COMPACT) }
         }
         ViewMode.GRID, ViewMode.LARGE_GRID -> LazyVerticalGrid(

@@ -50,6 +50,8 @@ A modern Android media player for music and video, built with Kotlin, Jetpack Co
 | Storage | Room (playlists), DataStore (settings) |
 | Images | Coil (album art and video thumbnails) |
 
+Adapts to tablets, foldables and landscape: a navigation rail replaces the bottom bar on wide screens, lists flow into several columns, Now Playing shows artwork and controls side by side, and forms stay readable width.
+
 minSdk 26 (Android 8.0), targetSdk 35.
 
 ## Building

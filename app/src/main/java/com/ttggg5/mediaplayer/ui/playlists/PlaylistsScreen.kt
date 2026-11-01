@@ -2,6 +2,8 @@
 
 package com.ttggg5.mediaplayer.ui.playlists
 
+import androidx.compose.foundation.layout.wrapContentWidth
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
@@ -77,7 +79,10 @@ fun PlaylistsScreen(vm: PlaylistsViewModel, onOpen: (Long) -> Unit, onOpenSettin
                     "Create one here, or add songs from the ⋮ menu in your library.",
                 )
             } else {
-                LazyColumn(contentPadding = PaddingValues(bottom = 96.dp)) {
+                LazyColumn(
+                    Modifier.fillMaxSize().wrapContentWidth().widthIn(max = 720.dp),
+                    contentPadding = PaddingValues(bottom = 96.dp),
+                ) {
                     items(playlists, key = { it.id }) { playlist ->
                         PlaylistRow(
                             playlist,

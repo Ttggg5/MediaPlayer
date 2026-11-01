@@ -10,6 +10,9 @@ import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -112,106 +115,125 @@ fun NowPlayingScreen(state: MusicState, music: MusicController, onCollapse: () -
                 ),
             )
 
-            Column(
-                Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().padding(horizontal = 24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = onCollapse) { Icon(Icons.Rounded.KeyboardArrowDown, "Collapse") }
+            BoxWithConstraints(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
+                // Side by side on wide, short windows (tablets in landscape, unfolded foldables); stacked otherwise.
+                val twoPane = maxWidth >= 600.dp && maxWidth > maxHeight
+                val artwork: @Composable (Modifier) -> Unit = { modifier ->
+                    Box(modifier, contentAlignment = Alignment.Center) {
+                        Artwork(
+                            state.artworkUri,
+                            Modifier
+                                .widthIn(max = 520.dp)
+                                .aspectRatio(1f)
+                                .scale(artScale)
+                                .shadow(24.dp, RoundedCornerShape(32.dp)),
+                            shape = RoundedCornerShape(32.dp),
+                            iconSize = 96.dp,
+                        )
+                    }
+                }
+                val details: @Composable () -> Unit = {
+                    Column(Modifier.widthIn(max = 560.dp).fillMaxWidth()) {
                     Text(
-                        "Now playing",
+                        state.title,
+                        style = MaterialTheme.typography.headlineSmall,
+                        maxLines = 1,
+                        modifier = Modifier.fillMaxWidth().basicMarquee(),
+                    )
+                    Text(
+                        state.artist,
                         style = MaterialTheme.typography.titleMedium,
-                        modifier = Modifier.weight(1f),
-                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                        color = scheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
                     )
-                    IconButton(onClick = { showQueue = true }) { Icon(Icons.AutoMirrored.Rounded.QueueMusic, "Queue") }
-                }
 
-                Spacer(Modifier.weight(1f))
-                Artwork(
-                    state.artworkUri,
-                    Modifier
-                        .fillMaxWidth()
-                        .aspectRatio(1f)
-                        .scale(artScale)
-                        .shadow(24.dp, RoundedCornerShape(32.dp)),
-                    shape = RoundedCornerShape(32.dp),
-                    iconSize = 96.dp,
-                )
-                Spacer(Modifier.weight(1f))
-
-                Text(
-                    state.title,
-                    style = MaterialTheme.typography.headlineSmall,
-                    maxLines = 1,
-                    modifier = Modifier.fillMaxWidth().basicMarquee(),
-                )
-                Text(
-                    state.artist,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = scheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
-                )
-
-                Spacer(Modifier.height(16.dp))
-                val duration = state.durationMs.coerceAtLeast(1L)
-                Slider(
-                    value = if (dragging) dragValue else (position.toFloat() / duration).coerceIn(0f, 1f),
-                    onValueChange = { dragging = true; dragValue = it },
-                    onValueChangeFinished = {
-                        val target = (dragValue * duration).toLong()
-                        music.seekTo(target)
-                        position = target
-                        dragging = false
-                    },
-                )
-                Row(Modifier.fillMaxWidth()) {
-                    Text(
-                        formatDuration(if (dragging) (dragValue * duration).toLong() else position),
-                        style = MaterialTheme.typography.labelMedium,
+                    Spacer(Modifier.height(16.dp))
+                    val duration = state.durationMs.coerceAtLeast(1L)
+                    Slider(
+                        value = if (dragging) dragValue else (position.toFloat() / duration).coerceIn(0f, 1f),
+                        onValueChange = { dragging = true; dragValue = it },
+                        onValueChangeFinished = {
+                            val target = (dragValue * duration).toLong()
+                            music.seekTo(target)
+                            position = target
+                            dragging = false
+                        },
                     )
-                    Spacer(Modifier.weight(1f))
-                    Text(formatDuration(state.durationMs), style = MaterialTheme.typography.labelMedium)
-                }
-
-                Row(
-                    Modifier.fillMaxWidth().padding(vertical = 24.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    IconButton(onClick = music::toggleShuffle) {
-                        Icon(
-                            Icons.Rounded.Shuffle,
-                            "Shuffle",
-                            tint = if (state.shuffle) scheme.primary else scheme.onSurfaceVariant,
+                    Row(Modifier.fillMaxWidth()) {
+                        Text(
+                            formatDuration(if (dragging) (dragValue * duration).toLong() else position),
+                            style = MaterialTheme.typography.labelMedium,
                         )
+                        Spacer(Modifier.weight(1f))
+                        Text(formatDuration(state.durationMs), style = MaterialTheme.typography.labelMedium)
                     }
-                    IconButton(onClick = music::previous, modifier = Modifier.size(56.dp)) {
-                        Icon(Icons.Rounded.SkipPrevious, "Previous", Modifier.size(36.dp))
-                    }
-                    FilledIconButton(
-                        onClick = music::togglePlay,
-                        modifier = Modifier.size(80.dp),
-                        shape = RoundedCornerShape(if (state.isPlaying) 24.dp else 40.dp),
-                        colors = IconButtonDefaults.filledIconButtonColors(containerColor = scheme.primary),
+
+                    Row(
+                        Modifier.fillMaxWidth().padding(vertical = 24.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Icon(
-                            if (state.isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
-                            if (state.isPlaying) "Pause" else "Play",
-                            Modifier.size(40.dp),
-                        )
+                        IconButton(onClick = music::toggleShuffle) {
+                            Icon(
+                                Icons.Rounded.Shuffle,
+                                "Shuffle",
+                                tint = if (state.shuffle) scheme.primary else scheme.onSurfaceVariant,
+                            )
+                        }
+                        IconButton(onClick = music::previous, modifier = Modifier.size(56.dp)) {
+                            Icon(Icons.Rounded.SkipPrevious, "Previous", Modifier.size(36.dp))
+                        }
+                        FilledIconButton(
+                            onClick = music::togglePlay,
+                            modifier = Modifier.size(80.dp),
+                            shape = RoundedCornerShape(if (state.isPlaying) 24.dp else 40.dp),
+                            colors = IconButtonDefaults.filledIconButtonColors(containerColor = scheme.primary),
+                        ) {
+                            Icon(
+                                if (state.isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+                                if (state.isPlaying) "Pause" else "Play",
+                                Modifier.size(40.dp),
+                            )
+                        }
+                        IconButton(onClick = music::next, modifier = Modifier.size(56.dp)) {
+                            Icon(Icons.Rounded.SkipNext, "Next", Modifier.size(36.dp))
+                        }
+                        IconButton(onClick = music::cycleRepeat) {
+                            Icon(
+                                if (state.repeatMode == Player.REPEAT_MODE_ONE) Icons.Rounded.RepeatOne else Icons.Rounded.Repeat,
+                                "Repeat",
+                                tint = if (state.repeatMode != Player.REPEAT_MODE_OFF) scheme.primary else scheme.onSurfaceVariant,
+                            )
+                        }
                     }
-                    IconButton(onClick = music::next, modifier = Modifier.size(56.dp)) {
-                        Icon(Icons.Rounded.SkipNext, "Next", Modifier.size(36.dp))
                     }
-                    IconButton(onClick = music::cycleRepeat) {
-                        Icon(
-                            if (state.repeatMode == Player.REPEAT_MODE_ONE) Icons.Rounded.RepeatOne else Icons.Rounded.Repeat,
-                            "Repeat",
-                            tint = if (state.repeatMode != Player.REPEAT_MODE_OFF) scheme.primary else scheme.onSurfaceVariant,
+                }
+
+                Column(Modifier.fillMaxSize().padding(horizontal = 24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        IconButton(onClick = onCollapse) { Icon(Icons.Rounded.KeyboardArrowDown, "Collapse") }
+                        Text(
+                            "Now playing",
+                            style = MaterialTheme.typography.titleMedium,
+                            modifier = Modifier.weight(1f),
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                         )
+                        IconButton(onClick = { showQueue = true }) { Icon(Icons.AutoMirrored.Rounded.QueueMusic, "Queue") }
+                    }
+                    if (twoPane) {
+                        Row(
+                            Modifier.weight(1f).fillMaxWidth().padding(bottom = 16.dp),
+                            horizontalArrangement = Arrangement.spacedBy(32.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            artwork(Modifier.weight(1f).fillMaxHeight())
+                            Box(Modifier.weight(1f), contentAlignment = Alignment.Center) { details() }
+                        }
+                    } else {
+                        artwork(Modifier.weight(1f).fillMaxWidth().padding(vertical = 16.dp))
+                        details()
                     }
                 }
             }

@@ -8,6 +8,16 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.unit.dp
+import com.ttggg5.mediaplayer.ui.components.isWideLayout
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
@@ -26,6 +36,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationRail
+import androidx.compose.material3.NavigationRailItem
+import androidx.compose.material3.ScaffoldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -117,16 +130,31 @@ fun MainScreen(container: AppContainer, openNowPlayingRequests: Int) {
         )
     }
 
+    // Tablets, unfolded foldables and landscape: side navigation rail instead of the bottom bar.
+    val wide = isWideLayout()
+    val miniPlayer: @Composable () -> Unit = {
+        if (musicState.currentItem != null) {
+            MiniPlayer(
+                musicState,
+                music,
+                onExpand = { nowPlayingOpen = true },
+                modifier = if (wide) Modifier.widthIn(max = 720.dp) else Modifier,
+            )
+        }
+    }
+
     Box(Modifier.fillMaxSize()) {
+        Row(Modifier.fillMaxSize()) {
+        if (wide) NavRail(nav)
         Scaffold(
+            modifier = Modifier.weight(1f),
             bottomBar = {
-                Column {
-                    if (musicState.currentItem != null) {
-                        MiniPlayer(musicState, music, onExpand = { nowPlayingOpen = true })
-                    }
-                    BottomBar(nav)
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    miniPlayer()
+                    if (!wide) BottomBar(nav)
                 }
             },
+            contentWindowInsets = if (wide) WindowInsets.systemBars.only(WindowInsetsSides.End + WindowInsetsSides.Bottom) else ScaffoldDefaults.contentWindowInsets,
         ) { padding ->
             NavHost(
                 navController = nav,
@@ -222,6 +250,8 @@ fun MainScreen(container: AppContainer, openNowPlayingRequests: Int) {
             }
         }
 
+        }
+
         AnimatedVisibility(
             visible = nowPlayingOpen && musicState.currentItem != null,
             enter = slideInVertically { it },
@@ -291,12 +321,12 @@ private fun PlaylistDetailRoute(
     }
 }
 
+/** The tab to highlight for the current route; detail screens keep their parent tab highlighted. */
 @Composable
-private fun BottomBar(nav: NavHostController) {
+private fun selectedTab(nav: NavHostController): String {
     val backStack by nav.currentBackStackEntryAsState()
     val currentRoute = backStack?.destination?.route
-    // Detail screens keep their parent tab highlighted.
-    val selectedTab = when {
+    return when {
         currentRoute == null -> "music"
         currentRoute.startsWith("playlist/") -> "playlists"
         currentRoute.startsWith("videoFolder/") -> "videos"
@@ -304,20 +334,42 @@ private fun BottomBar(nav: NavHostController) {
         currentRoute.contains("/") -> "music"
         else -> currentRoute
     }
+}
+
+private fun NavHostController.openTab(route: String) = navigate(route) {
+    popUpTo(graph.findStartDestination().id) { saveState = true }
+    launchSingleTop = true
+    restoreState = true
+}
+
+@Composable
+private fun BottomBar(nav: NavHostController) {
+    val selected = selectedTab(nav)
     NavigationBar {
         Destinations.forEach { dest ->
             NavigationBarItem(
-                selected = selectedTab == dest.route,
-                onClick = {
-                    nav.navigate(dest.route) {
-                        popUpTo(nav.graph.findStartDestination().id) { saveState = true }
-                        launchSingleTop = true
-                        restoreState = true
-                    }
-                },
+                selected = selected == dest.route,
+                onClick = { nav.openTab(dest.route) },
                 icon = { Icon(dest.icon, null) },
                 label = { Text(dest.label) },
             )
         }
+    }
+}
+
+@Composable
+private fun NavRail(nav: NavHostController) {
+    val selected = selectedTab(nav)
+    NavigationRail {
+        Spacer(Modifier.weight(1f))
+        Destinations.forEach { dest ->
+            NavigationRailItem(
+                selected = selected == dest.route,
+                onClick = { nav.openTab(dest.route) },
+                icon = { Icon(dest.icon, null) },
+                label = { Text(dest.label) },
+            )
+        }
+        Spacer(Modifier.weight(1f))
     }
 }

@@ -94,7 +94,9 @@ class VideoPlayerActivity : ComponentActivity(), VideoPlayerHost {
 
             override fun onVideoSizeChanged(videoSize: VideoSize) {
                 updatePipParams()
-                if (!orientationChosen && !splitMode.value && videoSize.width > 0 && videoSize.height > 0) {
+                // Phones rotate to match the video; tablets and unfolded foldables keep the user's orientation.
+                val largeScreen = resources.configuration.smallestScreenWidthDp >= 600
+                if (!orientationChosen && !splitMode.value && !largeScreen && videoSize.width > 0 && videoSize.height > 0) {
                     orientationChosen = true
                     requestedOrientation = if (videoSize.width >= videoSize.height) {
                         ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE

@@ -1,5 +1,6 @@
 package com.ttggg5.mediaplayer.ui.permissions
 
+import androidx.compose.foundation.layout.widthIn
 import android.Manifest
 import android.content.Context
 import android.content.Intent
@@ -83,7 +84,11 @@ fun PermissionGate(content: @Composable () -> Unit) {
 
     Surface(Modifier.fillMaxSize()) {
         Box(Modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            Column(
+                Modifier.widthIn(max = 480.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
                 Surface(
                     shape = RoundedCornerShape(32.dp),
                     color = MaterialTheme.colorScheme.primaryContainer,
