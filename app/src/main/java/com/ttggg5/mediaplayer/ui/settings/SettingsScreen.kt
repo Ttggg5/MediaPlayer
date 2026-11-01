@@ -2,6 +2,12 @@
 
 package com.ttggg5.mediaplayer.ui.settings
 
+import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.ListItemDefaults
+import androidx.compose.material3.Surface
+import com.ttggg5.mediaplayer.ui.components.AppTopBar
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.layout.widthIn
 import android.content.Intent
@@ -81,11 +87,7 @@ fun SettingsScreen(container: AppContainer, onBack: () -> Unit) {
 
     ScreenScaffold(
         topBar = { scroll ->
-            TopAppBar(
-                title = { Text("Settings") },
-                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back") } },
-                scrollBehavior = scroll,
-            )
+            AppTopBar("Settings", scroll, onBack = onBack)
         },
     ) { padding ->
         Column(
@@ -96,61 +98,63 @@ fun SettingsScreen(container: AppContainer, onBack: () -> Unit) {
                 .widthIn(max = 720.dp)
                 .verticalScroll(rememberScrollState()),
         ) {
-            Section("Appearance")
-            ClickRow(Icons.Rounded.DarkMode, "Theme", current.themeMode.label) { picker = "theme" }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                SwitchRow(Icons.Rounded.Palette, "Dynamic colors", "Match colors to your wallpaper", current.dynamicColor) {
-                    scope.launch { settings.setDynamicColor(it) }
+            SettingsGroup("Appearance") {
+                ClickRow(Icons.Rounded.DarkMode, "Theme", current.themeMode.label) { picker = "theme" }
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    SwitchRow(Icons.Rounded.Palette, "Dynamic colors", "Match colors to your wallpaper", current.dynamicColor) {
+                        scope.launch { settings.setDynamicColor(it) }
+                    }
                 }
             }
-
-            Section("Video")
-            SwitchRow(
-                Icons.Rounded.TouchApp,
-                "Gestures",
-                "Swipe for brightness, volume and seeking; double-tap to skip",
-                current.videoGestures,
-            ) { scope.launch { settings.setVideoGestures(it) } }
-            ClickRow(Icons.Rounded.FastForward, "Skip length", "${current.seekStepSeconds} seconds") { picker = "seek" }
-            SwitchRow(Icons.Rounded.History, "Resume playback", "Continue videos where you left off", current.resumeVideos) {
-                scope.launch { settings.setResumeVideos(it) }
+            SettingsGroup("Video") {
+                SwitchRow(
+                    Icons.Rounded.TouchApp,
+                    "Gestures",
+                    "Swipe for brightness, volume and seeking; double-tap to skip",
+                    current.videoGestures,
+                ) { scope.launch { settings.setVideoGestures(it) } }
+                ClickRow(Icons.Rounded.FastForward, "Skip length", "${current.seekStepSeconds} seconds") { picker = "seek" }
+                SwitchRow(Icons.Rounded.History, "Resume playback", "Continue videos where you left off", current.resumeVideos) {
+                    scope.launch { settings.setResumeVideos(it) }
+                }
             }
-
-            Section("Library")
-            ClickRow(Icons.Rounded.LibraryMusic, "Music folders", folderSummary(musicFolders, media::folderKey)) {
-                picker = "musicFolders"
+            SettingsGroup("Library") {
+                ClickRow(Icons.Rounded.LibraryMusic, "Music folders", folderSummary(musicFolders, media::folderKey)) {
+                    picker = "musicFolders"
+                }
+                ClickRow(Icons.Rounded.VideoLibrary, "Video folders", folderSummary(videoFolders, media::folderKey)) {
+                    picker = "videoFolders"
+                }
+                SwitchRow(
+                    Icons.Rounded.MusicOff,
+                    "Hide short audio",
+                    "Skip clips shorter than 30 seconds, like ringtones and voice notes",
+                    current.hideShortAudio,
+                ) { scope.launch { settings.setHideShortAudio(it) } }
+                ClickRow(Icons.Rounded.Refresh, "Rescan library", "Look for new music and videos") {
+                    container.mediaRepository.refresh()
+                }
             }
-            ClickRow(Icons.Rounded.VideoLibrary, "Video folders", folderSummary(videoFolders, media::folderKey)) {
-                picker = "videoFolders"
+            SettingsGroup("Updates") {
+                SwitchRow(Icons.Rounded.Update, "Check automatically", "Look for a new version when the app starts", current.autoCheckUpdates) {
+                    scope.launch { settings.setAutoCheckUpdates(it) }
+                }
+                ListItem(
+                    modifier = Modifier.clickable(enabled = updateState !is UpdateState.Checking) { updates.check() },
+                    colors = transparentRow(),
+                    leadingContent = { RowIcon(Icons.Rounded.SystemUpdate) },
+                    headlineContent = { Text("Check for updates") },
+                    supportingContent = { Text(updateStatusText(updateState, updates)) },
+                    trailingContent = {
+                        if (updateState is UpdateState.Checking) CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp)
+                    },
+                )
             }
-            SwitchRow(
-                Icons.Rounded.MusicOff,
-                "Hide short audio",
-                "Skip clips shorter than 30 seconds, like ringtones and voice notes",
-                current.hideShortAudio,
-            ) { scope.launch { settings.setHideShortAudio(it) } }
-            ClickRow(Icons.Rounded.Refresh, "Rescan library", "Look for new music and videos") {
-                container.mediaRepository.refresh()
-            }
-
-            Section("Updates")
-            SwitchRow(Icons.Rounded.Update, "Check automatically", "Look for a new version when the app starts", current.autoCheckUpdates) {
-                scope.launch { settings.setAutoCheckUpdates(it) }
-            }
-            ListItem(
-                modifier = Modifier.clickable(enabled = updateState !is UpdateState.Checking) { updates.check() },
-                leadingContent = { Icon(Icons.Rounded.SystemUpdate, null) },
-                headlineContent = { Text("Check for updates") },
-                supportingContent = { Text(updateStatusText(updateState, updates)) },
-                trailingContent = {
-                    if (updateState is UpdateState.Checking) CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp)
-                },
-            )
-
-            Section("About")
-            ClickRow(Icons.Rounded.Info, "Version", updates.currentVersion) {}
-            ClickRow(Icons.Rounded.Code, "Source code", UpdateManager.REPO_URL.removePrefix("https://")) {
-                runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(UpdateManager.REPO_URL))) }
+            SettingsGroup("About") {
+                ClickRow(Icons.Rounded.Info, "Version", updates.currentVersion) {}
+                ClickRow(Icons.Rounded.Code, "Source code", UpdateManager.REPO_URL.removePrefix("https://")) {
+                    runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(UpdateManager.REPO_URL))) }
+                }
             }
         }
     }
@@ -210,23 +214,39 @@ private fun updateStatusText(state: UpdateState, updates: UpdateManager): String
 }
 
 @Composable
-private fun Section(title: String) {
-    Column {
-        HorizontalDivider(Modifier.padding(top = 8.dp))
+private fun SettingsGroup(title: String, content: @Composable () -> Unit) {
+    Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
         Text(
             title,
             style = MaterialTheme.typography.labelLarge,
             color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 4.dp),
+            modifier = Modifier.padding(start = 8.dp, bottom = 8.dp),
         )
+        Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainerLow) {
+            Column(Modifier.padding(vertical = 4.dp)) { content() }
+        }
     }
 }
+
+/** Icon in a soft tinted circle, used at the start of settings rows. */
+@Composable
+private fun RowIcon(icon: ImageVector) {
+    Surface(shape = CircleShape, color = MaterialTheme.colorScheme.secondaryContainer, modifier = Modifier.size(40.dp)) {
+        Box(contentAlignment = Alignment.Center) {
+            Icon(icon, null, Modifier.size(22.dp), tint = MaterialTheme.colorScheme.onSecondaryContainer)
+        }
+    }
+}
+
+@Composable
+private fun transparentRow() = ListItemDefaults.colors(containerColor = Color.Transparent)
 
 @Composable
 private fun ClickRow(icon: ImageVector, title: String, subtitle: String, onClick: () -> Unit) {
     ListItem(
         modifier = Modifier.clickable(onClick = onClick),
-        leadingContent = { Icon(icon, null) },
+        colors = transparentRow(),
+        leadingContent = { RowIcon(icon) },
         headlineContent = { Text(title) },
         supportingContent = { Text(subtitle) },
     )
@@ -236,7 +256,8 @@ private fun ClickRow(icon: ImageVector, title: String, subtitle: String, onClick
 private fun SwitchRow(icon: ImageVector, title: String, subtitle: String, checked: Boolean, onChange: (Boolean) -> Unit) {
     ListItem(
         modifier = Modifier.clickable { onChange(!checked) },
-        leadingContent = { Icon(icon, null) },
+        colors = transparentRow(),
+        leadingContent = { RowIcon(icon) },
         headlineContent = { Text(title) },
         supportingContent = { Text(subtitle) },
         trailingContent = { Switch(checked = checked, onCheckedChange = onChange) },

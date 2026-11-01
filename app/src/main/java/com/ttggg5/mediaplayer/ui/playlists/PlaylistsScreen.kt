@@ -2,6 +2,7 @@
 
 package com.ttggg5.mediaplayer.ui.playlists
 
+import com.ttggg5.mediaplayer.ui.components.AppTopBar
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.clickable
@@ -57,11 +58,9 @@ fun PlaylistsScreen(vm: PlaylistsViewModel, onOpen: (Long) -> Unit, onOpenSettin
 
     ScreenScaffold(
         topBar = { scroll ->
-            TopAppBar(
-                title = { Text("Playlists") },
-                actions = { IconButton(onClick = onOpenSettings) { Icon(Icons.Rounded.Settings, "Settings") } },
-                scrollBehavior = scroll,
-            )
+            AppTopBar("Playlists", scroll) {
+                IconButton(onClick = onOpenSettings) { Icon(Icons.Rounded.Settings, "Settings") }
+            }
         },
         floatingActionButton = {
             ExtendedFloatingActionButton(

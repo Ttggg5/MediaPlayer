@@ -92,7 +92,13 @@ import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun NowPlayingScreen(state: MusicState, music: MusicController, onCollapse: () -> Unit) {
+fun NowPlayingScreen(
+    state: MusicState,
+    music: MusicController,
+    onCollapse: () -> Unit,
+    /** Docked as a side panel on large tablets: no collapse button or swipe-down, transparent background. */
+    embedded: Boolean = false,
+) {
     var position by remember { mutableLongStateOf(0L) }
     var dragging by remember { mutableStateOf(false) }
     var dragValue by remember { mutableFloatStateOf(0f) }
@@ -124,7 +130,8 @@ fun NowPlayingScreen(state: MusicState, music: MusicController, onCollapse: () -
         Modifier
             .fillMaxSize()
             .offset { IntOffset(0, dismissY.value.roundToInt()) }
-            .pointerInput(Unit) {
+            .pointerInput(embedded) {
+                if (embedded) return@pointerInput
                 detectVerticalDragGestures(
                     onDragEnd = {
                         if (dismissY.value > size.height * 0.25f) {
@@ -140,7 +147,7 @@ fun NowPlayingScreen(state: MusicState, music: MusicController, onCollapse: () -
                     scope.launch { dismissY.snapTo((dismissY.value + dy).coerceAtLeast(0f)) }
                 }
             },
-        color = scheme.surface,
+        color = if (embedded) Color.Transparent else scheme.surface,
     ) {
         Box(Modifier.fillMaxSize()) {
             // Blurred artwork backdrop (blur is applied on Android 12+, a soft scrim covers older versions).
@@ -291,7 +298,11 @@ fun NowPlayingScreen(state: MusicState, music: MusicController, onCollapse: () -
 
                 Column(Modifier.fillMaxSize().padding(horizontal = 24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                        IconButton(onClick = onCollapse) { Icon(Icons.Rounded.KeyboardArrowDown, "Collapse") }
+                        if (embedded) {
+                            Spacer(Modifier.size(48.dp))
+                        } else {
+                            IconButton(onClick = onCollapse) { Icon(Icons.Rounded.KeyboardArrowDown, "Collapse") }
+                        }
                         Text(
                             "Now playing",
                             style = MaterialTheme.typography.titleMedium,

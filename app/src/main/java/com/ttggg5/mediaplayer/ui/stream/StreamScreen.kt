@@ -2,6 +2,7 @@
 
 package com.ttggg5.mediaplayer.ui.stream
 
+import com.ttggg5.mediaplayer.ui.components.AppTopBar
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.layout.widthIn
 import android.net.Uri
@@ -94,11 +95,9 @@ fun StreamScreen(
 
     ScreenScaffold(
         topBar = { scroll ->
-            TopAppBar(
-                title = { Text("Stream") },
-                actions = { IconButton(onClick = onOpenSettings) { Icon(Icons.Rounded.Settings, "Settings") } },
-                scrollBehavior = scroll,
-            )
+            AppTopBar("Stream", scroll) {
+                IconButton(onClick = onOpenSettings) { Icon(Icons.Rounded.Settings, "Settings") }
+            }
         },
     ) { padding ->
         LazyColumn(

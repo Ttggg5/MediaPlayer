@@ -64,7 +64,7 @@ fun MiniPlayer(state: MusicState, music: MusicController, onExpand: () -> Unit, 
     Surface(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 8.dp, vertical = 4.dp)
+            .padding(horizontal = 12.dp, vertical = 6.dp)
             .offset { IntOffset(offsetX.value.roundToInt(), offsetY.value.roundToInt()) }
             .graphicsLayer { alpha = 1f - (abs(offsetX.value) / (threshold * 4)).coerceIn(0f, 0.5f) }
             .pointerInput(music) {
@@ -93,14 +93,15 @@ fun MiniPlayer(state: MusicState, music: MusicController, onExpand: () -> Unit, 
                     }
                 }
             }
-            .clip(RoundedCornerShape(20.dp))
+            .clip(RoundedCornerShape(24.dp))
             .clickable(onClick = onExpand),
-        color = MaterialTheme.colorScheme.secondaryContainer,
-        tonalElevation = 3.dp,
+        shape = RoundedCornerShape(24.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        shadowElevation = 6.dp,
     ) {
         Column {
             Row(Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Artwork(state.artworkUri, Modifier.size(44.dp), shape = RoundedCornerShape(10.dp))
+                Artwork(state.artworkUri, Modifier.size(48.dp), shape = RoundedCornerShape(14.dp))
                 Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
                     Text(
                         state.title,

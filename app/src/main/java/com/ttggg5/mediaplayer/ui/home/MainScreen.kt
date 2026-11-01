@@ -1,5 +1,16 @@
 package com.ttggg5.mediaplayer.ui.home
 
+import androidx.compose.material.icons.rounded.GraphicEq
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.animateContentSize
 import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
@@ -17,7 +28,8 @@ import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.unit.dp
-import com.ttggg5.mediaplayer.ui.components.isWideLayout
+import com.ttggg5.mediaplayer.ui.components.WindowSize
+import com.ttggg5.mediaplayer.ui.components.windowSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
@@ -130,10 +142,13 @@ fun MainScreen(container: AppContainer, openNowPlayingRequests: Int) {
         )
     }
 
-    // Tablets, unfolded foldables and landscape: side navigation rail instead of the bottom bar.
-    val wide = isWideLayout()
+    // Phones: bottom bar. Foldables / small tablets: side rail. Large tablets: side rail plus a
+    // docked Now Playing panel on the right while something plays.
+    val size = windowSize()
+    val wide = size != WindowSize.COMPACT
+    val docked = size == WindowSize.EXPANDED && musicState.currentItem != null
     val miniPlayer: @Composable () -> Unit = {
-        if (musicState.currentItem != null) {
+        if (musicState.currentItem != null && !docked) {
             MiniPlayer(musicState, music, onExpand = { nowPlayingOpen = true })
         }
     }
@@ -142,7 +157,7 @@ fun MainScreen(container: AppContainer, openNowPlayingRequests: Int) {
         Row(Modifier.fillMaxSize()) {
         if (wide) NavRail(nav)
         Scaffold(
-            modifier = Modifier.weight(1f),
+            modifier = Modifier.weight(1f).animateContentSize(),
             bottomBar = {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     miniPlayer()
@@ -245,10 +260,24 @@ fun MainScreen(container: AppContainer, openNowPlayingRequests: Int) {
             }
         }
 
+            AnimatedVisibility(
+                visible = docked,
+                enter = slideInHorizontally { it } + fadeIn(),
+                exit = slideOutHorizontally { it } + fadeOut(),
+            ) {
+                Surface(
+                    modifier = Modifier.fillMaxHeight().width(400.dp).padding(8.dp),
+                    shape = MaterialTheme.shapes.extraLarge,
+                    color = MaterialTheme.colorScheme.surfaceContainerLow,
+                    tonalElevation = 1.dp,
+                ) {
+                    NowPlayingScreen(musicState, music, onCollapse = {}, embedded = true)
+                }
+            }
         }
 
         AnimatedVisibility(
-            visible = nowPlayingOpen && musicState.currentItem != null,
+            visible = nowPlayingOpen && musicState.currentItem != null && !docked,
             enter = slideInVertically { it },
             exit = slideOutVertically { it },
         ) {
@@ -256,7 +285,7 @@ fun MainScreen(container: AppContainer, openNowPlayingRequests: Int) {
         }
     }
 
-    BackHandler(enabled = nowPlayingOpen && musicState.currentItem != null) { nowPlayingOpen = false }
+    BackHandler(enabled = nowPlayingOpen && musicState.currentItem != null && !docked) { nowPlayingOpen = false }
 
     UpdateDialog(updateState, container.updateManager)
 
@@ -355,7 +384,16 @@ private fun BottomBar(nav: NavHostController) {
 @Composable
 private fun NavRail(nav: NavHostController) {
     val selected = selectedTab(nav)
-    NavigationRail {
+    NavigationRail(containerColor = MaterialTheme.colorScheme.surface) {
+        Surface(
+            shape = MaterialTheme.shapes.large,
+            color = MaterialTheme.colorScheme.primaryContainer,
+            modifier = Modifier.padding(top = 12.dp).size(56.dp),
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(Icons.Rounded.GraphicEq, null, tint = MaterialTheme.colorScheme.onPrimaryContainer)
+            }
+        }
         Spacer(Modifier.weight(1f))
         Destinations.forEach { dest ->
             NavigationRailItem(

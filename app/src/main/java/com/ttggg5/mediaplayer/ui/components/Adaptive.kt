@@ -21,6 +21,19 @@ val WideLayoutWidth = 600.dp
 @Composable
 fun isWideLayout(): Boolean = LocalConfiguration.current.screenWidthDp.dp >= WideLayoutWidth
 
+/** Material window size classes by width: phones, foldables/small tablets, large tablets. */
+enum class WindowSize { COMPACT, MEDIUM, EXPANDED }
+
+@Composable
+fun windowSize(): WindowSize {
+    val width = LocalConfiguration.current.screenWidthDp
+    return when {
+        width >= 840 -> WindowSize.EXPANDED
+        width >= 600 -> WindowSize.MEDIUM
+        else -> WindowSize.COMPACT
+    }
+}
+
 /** Centres [content] and keeps it at most [maxWidth] wide, so forms and lists don't stretch on big screens. */
 @Composable
 fun CenteredContent(maxWidth: Dp = 720.dp, modifier: Modifier = Modifier, content: @Composable BoxScope.() -> Unit) {
