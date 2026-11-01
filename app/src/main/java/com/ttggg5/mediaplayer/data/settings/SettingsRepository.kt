@@ -85,6 +85,14 @@ class SettingsRepository(private val context: Context) {
         prefs[VIDEO_VIEW]?.let { runCatching { ViewMode.valueOf(it) }.getOrNull() } ?: ViewMode.GRID
     }
 
+    /** Whether the Folders tab shows the real folder tree instead of a flat folder list. */
+    val musicFolderTree: Flow<Boolean> = context.dataStore.data.map { it[MUSIC_TREE] ?: false }
+    val videoFolderTree: Flow<Boolean> = context.dataStore.data.map { it[VIDEO_TREE] ?: false }
+
+    suspend fun setFolderTree(video: Boolean, enabled: Boolean) = context.dataStore.edit {
+        it[if (video) VIDEO_TREE else MUSIC_TREE] = enabled
+    }
+
     suspend fun setViewMode(video: Boolean, mode: ViewMode) = context.dataStore.edit {
         it[if (video) VIDEO_VIEW else MUSIC_VIEW] = mode.name
     }
@@ -156,6 +164,8 @@ class SettingsRepository(private val context: Context) {
         val MUSIC_FOLDERS = stringSetPreferencesKey("music_folders")
         val MUSIC_VIEW = stringPreferencesKey("music_view_mode")
         val VIDEO_VIEW = stringPreferencesKey("video_view_mode")
+        val MUSIC_TREE = booleanPreferencesKey("music_folder_tree")
+        val VIDEO_TREE = booleanPreferencesKey("video_folder_tree")
         val VIDEO_FOLDERS = stringSetPreferencesKey("video_folders")
     }
 }

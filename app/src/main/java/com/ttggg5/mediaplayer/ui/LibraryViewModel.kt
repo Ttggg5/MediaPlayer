@@ -93,6 +93,15 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
     fun setMusicQuery(query: String) { _musicQuery.value = query }
     fun setVideoQuery(query: String) { _videoQuery.value = query }
 
+    val musicFolderTree: StateFlow<Boolean> =
+        settings.musicFolderTree.stateIn(viewModelScope, SharingStarted.Eagerly, false)
+    val videoFolderTree: StateFlow<Boolean> =
+        settings.videoFolderTree.stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
+    fun setFolderTree(video: Boolean, enabled: Boolean) {
+        viewModelScope.launch { settings.setFolderTree(video, enabled) }
+    }
+
     fun setViewMode(video: Boolean, mode: ViewMode) {
         viewModelScope.launch { settings.setViewMode(video, mode) }
     }

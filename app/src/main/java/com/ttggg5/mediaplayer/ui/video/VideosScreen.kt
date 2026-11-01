@@ -4,6 +4,7 @@ package com.ttggg5.mediaplayer.ui.video
 
 import android.content.Context
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
@@ -35,6 +36,8 @@ import com.ttggg5.mediaplayer.data.settings.ViewMode
 import com.ttggg5.mediaplayer.ui.LibraryViewModel
 import com.ttggg5.mediaplayer.ui.components.CollectionHeader
 import com.ttggg5.mediaplayer.ui.components.EmptyState
+import com.ttggg5.mediaplayer.ui.components.FolderBrowser
+import com.ttggg5.mediaplayer.ui.components.FolderModeChips
 import com.ttggg5.mediaplayer.ui.components.LibraryPage
 import com.ttggg5.mediaplayer.ui.components.MediaCollection
 import com.ttggg5.mediaplayer.ui.components.MediaItemUi
@@ -56,6 +59,7 @@ fun VideosScreen(vm: LibraryViewModel, onOpenFolder: (String) -> Unit, onOpenSet
     val sort by vm.videoSort.collectAsStateWithLifecycle()
     val loading by vm.isLoading.collectAsStateWithLifecycle()
     val mode by vm.videoViewMode.collectAsStateWithLifecycle()
+    val tree by vm.videoFolderTree.collectAsStateWithLifecycle()
     var tab by rememberSaveable { mutableIntStateOf(0) }
     var showOptions by remember { mutableStateOf(false) }
 
@@ -77,21 +81,38 @@ fun VideosScreen(vm: LibraryViewModel, onOpenFolder: (String) -> Unit, onOpenSet
             videos.isEmpty() ->
                 EmptyState(Icons.Rounded.VideoLibrary, "No videos found", "Videos on your device will show up here.")
             tab == 0 -> VideoList(videos, mode)
-            else -> MediaCollection(
-                items = folders.map { folder ->
-                    MediaItemUi(
-                        key = folder.path,
-                        title = folder.name,
-                        subtitle = countLabel(folder.videos.size, "video"),
-                        artwork = folder.videos.first().uri,
-                        shape = ThumbShape.WIDE,
-                        placeholder = Icons.Rounded.Folder,
-                        onClick = { onOpenFolder(folder.path) },
+            else -> Column {
+                FolderModeChips(tree) { vm.setFolderTree(video = true, it) }
+                if (tree) {
+                    FolderBrowser(
+                        items = videos,
+                        location = { it.location },
+                        mode = mode,
+                        noun = "video",
+                        toItem = { video, index, folderVideos ->
+                            video.toItem(key = "file:${video.id}") { playVideos(context, folderVideos, index) }
+                        },
+                        onPlayAll = { playVideos(context, it, 0) },
+                        onShuffle = { playVideos(context, it, 0, shuffle = true) },
                     )
-                },
-                mode = mode,
-                header = { CollectionHeader(countLabel(folders.size, "folder")) },
-            )
+                } else {
+                    MediaCollection(
+                        items = folders.map { folder ->
+                            MediaItemUi(
+                                key = folder.path,
+                                title = folder.name,
+                                subtitle = countLabel(folder.videos.size, "video"),
+                                artwork = folder.videos.first().uri,
+                                shape = ThumbShape.WIDE,
+                                placeholder = Icons.Rounded.Folder,
+                                onClick = { onOpenFolder(folder.path) },
+                            )
+                        },
+                        mode = mode,
+                        header = { CollectionHeader(countLabel(folders.size, "folder")) },
+                    )
+                }
+            }
         }
     }
 
@@ -148,21 +169,7 @@ fun VideoFolderScreen(vm: LibraryViewModel, path: String, onBack: () -> Unit) {
 private fun VideoList(videos: List<VideoItem>, mode: ViewMode) {
     val context = LocalContext.current
     MediaCollection(
-        items = videos.mapIndexed { index, video ->
-            MediaItemUi(
-                key = video.id,
-                title = video.title,
-                subtitle = buildString {
-                    if (video.height > 0) append("${minOf(video.width, video.height)}p · ")
-                    append(formatSize(video.sizeBytes))
-                },
-                artwork = video.uri,
-                shape = ThumbShape.WIDE,
-                placeholder = Icons.Rounded.Movie,
-                trailing = formatDuration(video.durationMs),
-                onClick = { playVideos(context, videos, index) },
-            )
-        },
+        items = videos.mapIndexed { index, video -> video.toItem { playVideos(context, videos, index) } },
         mode = mode,
         header = {
             CollectionHeader(
@@ -173,6 +180,21 @@ private fun VideoList(videos: List<VideoItem>, mode: ViewMode) {
         },
     )
 }
+
+/** A video as a library item, for any view mode. */
+private fun VideoItem.toItem(key: Any = id, onClick: () -> Unit) = MediaItemUi(
+    key = key,
+    title = title,
+    subtitle = buildString {
+        if (height > 0) append("${minOf(width, height)}p · ")
+        append(formatSize(sizeBytes))
+    },
+    artwork = uri,
+    shape = ThumbShape.WIDE,
+    placeholder = Icons.Rounded.Movie,
+    trailing = formatDuration(durationMs),
+    onClick = onClick,
+)
 
 private fun playVideos(context: Context, videos: List<VideoItem>, index: Int, shuffle: Boolean = false) {
     if (videos.isEmpty()) return

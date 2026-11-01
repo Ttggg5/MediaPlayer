@@ -2,6 +2,7 @@
 
 package com.ttggg5.mediaplayer.ui.music
 
+import androidx.compose.foundation.layout.Column
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Album
 import androidx.compose.material.icons.rounded.Folder
@@ -24,6 +25,8 @@ import com.ttggg5.mediaplayer.playback.MusicController
 import com.ttggg5.mediaplayer.ui.LibraryViewModel
 import com.ttggg5.mediaplayer.ui.components.CollectionHeader
 import com.ttggg5.mediaplayer.ui.components.EmptyState
+import com.ttggg5.mediaplayer.ui.components.FolderBrowser
+import com.ttggg5.mediaplayer.ui.components.FolderModeChips
 import com.ttggg5.mediaplayer.ui.components.LibraryPage
 import com.ttggg5.mediaplayer.ui.components.MediaCollection
 import com.ttggg5.mediaplayer.ui.components.MediaItemUi
@@ -68,7 +71,7 @@ fun MusicScreen(
             0 -> SongsTab(songs, mode, music, songActions)
             1 -> AlbumsTab(vm, mode, onOpenAlbum)
             2 -> ArtistsTab(vm, mode, onOpenArtist)
-            else -> FoldersTab(vm, mode, onOpenFolder)
+            else -> FoldersTab(vm, mode, songs, music, songActions, onOpenFolder)
         }
     }
 
@@ -188,12 +191,47 @@ private fun ArtistsTab(vm: LibraryViewModel, mode: ViewMode, onOpen: (String) ->
 }
 
 @Composable
-private fun FoldersTab(vm: LibraryViewModel, mode: ViewMode, onOpen: (String) -> Unit) {
+private fun FoldersTab(
+    vm: LibraryViewModel,
+    mode: ViewMode,
+    songs: List<AudioTrack>,
+    music: MusicController,
+    actions: SongActions,
+    onOpen: (String) -> Unit,
+) {
     val folders by vm.folders.collectAsStateWithLifecycle()
+    val tree by vm.musicFolderTree.collectAsStateWithLifecycle()
+    val state by music.state.collectAsStateWithLifecycle()
     if (folders.isEmpty()) {
         EmptyState(Icons.Rounded.Folder, "No folders", "Folders containing music appear here.")
         return
     }
+    Column {
+        FolderModeChips(tree) { vm.setFolderTree(video = false, it) }
+        if (tree) {
+            FolderBrowser(
+                items = songs,
+                location = { it.location },
+                mode = mode,
+                noun = "song",
+                toItem = { track, index, folderSongs ->
+                    track.toItem(
+                        isCurrent = track.id.toString() == state.currentItem?.mediaId,
+                        actions = actions,
+                        key = "file:${track.id}_$index",
+                    ) { music.playTracks(folderSongs, index) }
+                },
+                onPlayAll = { music.playTracks(it) },
+                onShuffle = { music.playTracks(it, shuffle = true) },
+            )
+        } else {
+            FlatFolders(folders, mode, onOpen)
+        }
+    }
+}
+
+@Composable
+private fun FlatFolders(folders: List<com.ttggg5.mediaplayer.data.media.Folder>, mode: ViewMode, onOpen: (String) -> Unit) {
     MediaCollection(
         items = folders.map { folder ->
             MediaItemUi(
