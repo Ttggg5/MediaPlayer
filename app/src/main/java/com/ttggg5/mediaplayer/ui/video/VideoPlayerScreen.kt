@@ -76,6 +76,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -100,10 +101,14 @@ import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.SeekParameters
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import com.ttggg5.mediaplayer.ui.components.formatDuration
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.conflate
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filterNotNull
 import java.util.Locale
 import kotlin.math.abs
 
@@ -165,6 +170,9 @@ fun VideoPlayerScreen(
     var indicator by remember { mutableStateOf<GestureIndicator?>(null) }
     var scrubbing by remember { mutableStateOf(false) }
     var scrubValue by remember { mutableFloatStateOf(0f) }
+    // Target of an in-progress scrub (timeline drag or swipe-to-seek); the picture follows it live.
+    var liveSeek by remember { mutableStateOf<Long?>(null) }
+    var resumeAfterScrub by remember { mutableStateOf(false) }
     var dialog by remember { mutableStateOf<String?>(null) }
     var menuOpen by remember { mutableStateOf(false) }
     var layoutMenuOpen by remember { mutableStateOf(false) }
@@ -191,9 +199,37 @@ fun VideoPlayerScreen(
         onDispose { player.removeListener(listener) }
     }
 
+    fun startScrub() {
+        resumeAfterScrub = player.playWhenReady
+        player.playWhenReady = false
+        // Keyframe seeks decode quickly, so frames keep up with the finger.
+        player.setSeekParameters(SeekParameters.CLOSEST_SYNC)
+    }
+
+    fun endScrub(target: Long) {
+        liveSeek = null
+        player.setSeekParameters(SeekParameters.EXACT)
+        player.seekTo(target)
+        position = target
+        if (resumeAfterScrub) player.playWhenReady = true
+        resumeAfterScrub = false
+    }
+
+    // Live scrubbing: seek to the newest target at most ~15 times a second.
+    LaunchedEffect(player) {
+        snapshotFlow { liveSeek }
+            .filterNotNull()
+            .distinctUntilChanged()
+            .conflate()
+            .collect { target ->
+                if (liveSeek != null) player.seekTo(target)
+                delay(60)
+            }
+    }
+
     LaunchedEffect(isPlaying) {
         do {
-            if (!scrubbing) position = player.currentPosition
+            if (!scrubbing && liveSeek == null) position = player.currentPosition
             delay(250)
         } while (isPlaying)
     }
@@ -327,7 +363,7 @@ fun VideoPlayerScreen(
                         var seekTarget = 0L
                         var startLevel = 0f
                         fun finish() {
-                            if (mode == DragMode.SEEK) player.seekTo(seekTarget)
+                            if (mode == DragMode.SEEK) endScrub(seekTarget)
                             if (mode == DragMode.CLOSE && total.y > size.height * CLOSE_FRACTION) host.close()
                             mode = DragMode.NONE
                             indicator = null
@@ -359,6 +395,8 @@ fun VideoPlayerScreen(
                                     }
                                     if (wanted !in gestures) mode = DragMode.IGNORED
                                     startPosition = player.currentPosition
+                                    seekTarget = startPosition
+                                    if (mode == DragMode.SEEK) startScrub()
                                     startLevel = when (mode) {
                                         DragMode.BRIGHTNESS -> host.getBrightness()
                                         DragMode.VOLUME -> host.getVolume()
@@ -370,6 +408,8 @@ fun VideoPlayerScreen(
                                         val dur = player.duration.takeIf { it != C.TIME_UNSET } ?: 0L
                                         val delta = (total.x / size.width * 120_000).toLong()
                                         seekTarget = (startPosition + delta).coerceIn(0L, dur.coerceAtLeast(0L))
+                                        liveSeek = seekTarget
+                                        position = seekTarget
                                         val sign = if (seekTarget >= startPosition) "+" else "-"
                                         indicator = GestureIndicator(
                                             null,
@@ -558,11 +598,15 @@ fun VideoPlayerScreen(
                             )
                             Slider(
                                 value = if (scrubbing) scrubValue else (position.toFloat() / dur).coerceIn(0f, 1f),
-                                onValueChange = { scrubbing = true; scrubValue = it; touch() },
+                                onValueChange = {
+                                    if (!scrubbing) startScrub()
+                                    scrubbing = true
+                                    scrubValue = it
+                                    liveSeek = (it * dur).toLong()
+                                    touch()
+                                },
                                 onValueChangeFinished = {
-                                    val target = (scrubValue * dur).toLong()
-                                    player.seekTo(target)
-                                    position = target
+                                    endScrub((scrubValue * dur).toLong())
                                     scrubbing = false
                                 },
                                 colors = SliderDefaults.colors(
