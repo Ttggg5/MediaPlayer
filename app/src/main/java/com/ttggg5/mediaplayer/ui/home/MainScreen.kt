@@ -1,5 +1,6 @@
 package com.ttggg5.mediaplayer.ui.home
 
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -123,7 +124,9 @@ fun MainScreen(container: AppContainer, openNowPlayingRequests: Int) {
             container.updateManager.check(quiet = true)
         }
     }
-    val openSettings = { nav.navigate("settings") { launchSingleTop = true } }
+    // Settings opens as a full-screen layer over the navigation bar, rail and players.
+    var settingsOpen by rememberSaveable { mutableStateOf(false) }
+    val openSettings = { settingsOpen = true }
 
     LaunchedEffect(openNowPlayingRequests) {
         if (openNowPlayingRequests > 0) nowPlayingOpen = true
@@ -196,7 +199,6 @@ fun MainScreen(container: AppContainer, openNowPlayingRequests: Int) {
                 composable("playlists") {
                     PlaylistsScreen(playlists, onOpen = { nav.navigate("playlist/$it") }, onOpenSettings = openSettings)
                 }
-                composable("settings") { SettingsScreen(container, onBack = { nav.popBackStack() }) }
                 composable("stream") {
                     StreamScreen(
                         container.settingsRepository,
@@ -284,9 +286,22 @@ fun MainScreen(container: AppContainer, openNowPlayingRequests: Int) {
         ) {
             NowPlayingScreen(musicState, music, onCollapse = { nowPlayingOpen = false })
         }
+
+        AnimatedVisibility(
+            visible = settingsOpen,
+            enter = slideInHorizontally { it } + fadeIn(),
+            exit = slideOutHorizontally { it } + fadeOut(),
+        ) {
+            Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
+                Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.systemBars)) {
+                    SettingsScreen(container, onBack = { settingsOpen = false })
+                }
+            }
+        }
     }
 
-    BackHandler(enabled = nowPlayingOpen && musicState.currentItem != null && !docked) { nowPlayingOpen = false }
+    BackHandler(enabled = nowPlayingOpen && musicState.currentItem != null && !docked && !settingsOpen) { nowPlayingOpen = false }
+    BackHandler(enabled = settingsOpen) { settingsOpen = false }
 
     UpdateDialog(updateState, container.updateManager)
     CrashReportDialog()

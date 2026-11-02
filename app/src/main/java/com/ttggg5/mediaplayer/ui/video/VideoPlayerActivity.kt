@@ -1,5 +1,8 @@
 package com.ttggg5.mediaplayer.ui.video
 
+import com.ttggg5.mediaplayer.ui.components.LocalGestureSettings
+import com.ttggg5.mediaplayer.data.settings.GestureSettings
+import androidx.compose.runtime.CompositionLocalProvider
 import android.app.PictureInPictureParams
 import android.content.Context
 import android.content.Intent
@@ -124,7 +127,9 @@ class VideoPlayerActivity : ComponentActivity(), VideoPlayerHost {
             val appSettings by settings.appSettings.collectAsStateWithLifecycle(initialValue = AppSettings())
             val splitLayout by settings.splitLayout.collectAsStateWithLifecycle(initialValue = SplitLayout.AUTO)
             SideEffect { currentSplitLayoutState.value = splitLayout }
+            val gestures by settings.gestures.collectAsStateWithLifecycle(initialValue = GestureSettings())
             MediaPlayerTheme(darkTheme = true, dynamicColor = appSettings.dynamicColor) {
+              CompositionLocalProvider(LocalGestureSettings provides gestures) {
                 val split = splitMode.value && !inPictureInPicture.value
                 SplitPlayerLayout(
                     split = split,
@@ -135,7 +140,6 @@ class VideoPlayerActivity : ComponentActivity(), VideoPlayerHost {
                             player = player,
                             inPictureInPicture = inPictureInPicture.value,
                             host = this,
-                            gesturesEnabled = appSettings.videoGestures,
                             seekStepMs = appSettings.seekStepSeconds * 1_000L,
                             modifier = modifier,
                             split = split,
@@ -143,6 +147,7 @@ class VideoPlayerActivity : ComponentActivity(), VideoPlayerHost {
                     },
                     other = { modifier -> MusicPane(container, player, modifier) },
                 )
+              }
             }
         }
     }

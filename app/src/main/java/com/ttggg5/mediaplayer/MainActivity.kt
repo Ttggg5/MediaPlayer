@@ -1,5 +1,8 @@
 package com.ttggg5.mediaplayer
 
+import com.ttggg5.mediaplayer.ui.components.LocalGestureSettings
+import com.ttggg5.mediaplayer.data.settings.GestureSettings
+import androidx.compose.runtime.CompositionLocalProvider
 import android.content.Intent
 import android.graphics.Color
 import android.os.Bundle
@@ -43,9 +46,12 @@ class MainActivity : ComponentActivity() {
                 enableEdgeToEdge(statusBarStyle = style, navigationBarStyle = style)
                 onDispose { }
             }
+            val gestures by container.settingsRepository.gestures.collectAsStateWithLifecycle(initialValue = GestureSettings())
             MediaPlayerTheme(darkTheme = darkTheme, dynamicColor = settings.dynamicColor) {
-                PermissionGate {
-                    MainScreen(container, openNowPlaying.intValue)
+                CompositionLocalProvider(LocalGestureSettings provides gestures) {
+                    PermissionGate {
+                        MainScreen(container, openNowPlaying.intValue)
+                    }
                 }
             }
         }

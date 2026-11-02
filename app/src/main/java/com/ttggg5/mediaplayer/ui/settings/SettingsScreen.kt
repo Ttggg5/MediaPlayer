@@ -2,6 +2,10 @@
 
 package com.ttggg5.mediaplayer.ui.settings
 
+import com.ttggg5.mediaplayer.data.settings.GestureSettings
+import com.ttggg5.mediaplayer.data.settings.Gesture
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.activity.compose.BackHandler
 import com.ttggg5.mediaplayer.ui.video.icon
 import com.ttggg5.mediaplayer.data.settings.SplitLayout
 import androidx.compose.ui.graphics.Color
@@ -81,6 +85,13 @@ fun SettingsScreen(container: AppContainer, onBack: () -> Unit) {
     val current by settings.appSettings.collectAsStateWithLifecycle(initialValue = AppSettings())
     val updateState by updates.state.collectAsStateWithLifecycle()
     var picker by remember { mutableStateOf<String?>(null) }
+    var showGestures by rememberSaveable { mutableStateOf(false) }
+    val gestures by settings.gestures.collectAsStateWithLifecycle(initialValue = GestureSettings())
+    if (showGestures) {
+        BackHandler { showGestures = false }
+        GestureSettingsScreen(container, onBack = { showGestures = false })
+        return
+    }
     val musicFolders by settings.musicFolders.collectAsStateWithLifecycle(initialValue = emptySet())
     val splitLayout by settings.splitLayout.collectAsStateWithLifecycle(initialValue = SplitLayout.AUTO)
     val videoFolders by settings.videoFolders.collectAsStateWithLifecycle(initialValue = emptySet())
@@ -110,12 +121,11 @@ fun SettingsScreen(container: AppContainer, onBack: () -> Unit) {
                 }
             }
             SettingsGroup("Video") {
-                SwitchRow(
+                ClickRow(
                     Icons.Rounded.TouchApp,
                     "Gestures",
-                    "Swipe for brightness, volume and seeking; double-tap to skip",
-                    current.videoGestures,
-                ) { scope.launch { settings.setVideoGestures(it) } }
+                    "${gestures.enabled.size} of ${Gesture.entries.size} on · choose each one",
+                ) { showGestures = true }
                 ClickRow(Icons.Rounded.FastForward, "Skip length", "${current.seekStepSeconds} seconds") { picker = "seek" }
                 SwitchRow(Icons.Rounded.History, "Resume playback", "Continue videos where you left off", current.resumeVideos) {
                     scope.launch { settings.setResumeVideos(it) }

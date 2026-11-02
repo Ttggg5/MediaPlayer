@@ -2,6 +2,8 @@
 
 package com.ttggg5.mediaplayer.ui.nowplaying
 
+import com.ttggg5.mediaplayer.ui.components.LocalGestureSettings
+import com.ttggg5.mediaplayer.data.settings.Gesture
 import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -116,6 +118,7 @@ fun NowPlayingScreen(
 
     // Swipe down anywhere to close; the screen follows the finger and springs back if not far enough.
     val scope = rememberCoroutineScope()
+    val gesturesOn = Gesture.NOW_PLAYING in LocalGestureSettings.current
     val dismissY = remember { Animatable(0f) }
     val artX = remember { Animatable(0f) }
     var pulse by remember { mutableStateOf<Boolean?>(null) }
@@ -130,8 +133,8 @@ fun NowPlayingScreen(
         Modifier
             .fillMaxSize()
             .offset { IntOffset(0, dismissY.value.roundToInt()) }
-            .pointerInput(embedded) {
-                if (embedded) return@pointerInput
+            .pointerInput(embedded, gesturesOn) {
+                if (embedded || !gesturesOn) return@pointerInput
                 detectVerticalDragGestures(
                     onDragEnd = {
                         if (dismissY.value > size.height * 0.25f) {
@@ -171,7 +174,8 @@ fun NowPlayingScreen(
                 val twoPane = maxWidth >= 600.dp && maxWidth > maxHeight
                 val artwork: @Composable (Modifier) -> Unit = { modifier ->
                     Box(
-                        modifier.pointerInput(music) {
+                        modifier.pointerInput(music, gesturesOn) {
+                            if (!gesturesOn) return@pointerInput
                             // Swipe the cover sideways to skip; double-tap it to play/pause.
                             val threshold = 96.dp.toPx()
                             detectHorizontalDragGestures(
@@ -187,7 +191,8 @@ fun NowPlayingScreen(
                                 change.consume()
                                 scope.launch { artX.snapTo(artX.value + dx) }
                             }
-                        }.pointerInput(music) {
+                        }.pointerInput(music, gesturesOn) {
+                            if (!gesturesOn) return@pointerInput
                             detectTapGestures(onDoubleTap = {
                                 pulse = true
                                 music.togglePlay()

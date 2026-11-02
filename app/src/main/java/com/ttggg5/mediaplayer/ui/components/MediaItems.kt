@@ -1,5 +1,6 @@
 package com.ttggg5.mediaplayer.ui.components
 
+import com.ttggg5.mediaplayer.data.settings.Gesture
 import androidx.compose.foundation.background
 import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.material3.SwipeToDismissBoxValue
@@ -150,7 +151,8 @@ private fun ThumbShape.shape(small: Boolean): Shape = when (this) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SwipeableRow(item: MediaItemUi, compact: Boolean) {
-    if (item.swipeRight == null && item.swipeLeft == null) {
+    val swipesOn = Gesture.SONG_ROWS in LocalGestureSettings.current
+    if (!swipesOn || (item.swipeRight == null && item.swipeLeft == null)) {
         MediaRow(item, compact)
         return
     }

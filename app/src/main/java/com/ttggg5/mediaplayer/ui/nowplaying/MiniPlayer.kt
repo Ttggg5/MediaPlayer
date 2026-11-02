@@ -1,5 +1,7 @@
 package com.ttggg5.mediaplayer.ui.nowplaying
 
+import com.ttggg5.mediaplayer.ui.components.LocalGestureSettings
+import com.ttggg5.mediaplayer.data.settings.Gesture
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -61,13 +63,15 @@ fun MiniPlayer(state: MusicState, music: MusicController, onExpand: () -> Unit, 
     val offsetX = remember { Animatable(0f) }
     val offsetY = remember { Animatable(0f) }
     val threshold = with(LocalDensity.current) { SWIPE_THRESHOLD.toPx() }
+    val swipes = Gesture.MINI_PLAYER in LocalGestureSettings.current
     Surface(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 12.dp, vertical = 6.dp)
             .offset { IntOffset(offsetX.value.roundToInt(), offsetY.value.roundToInt()) }
             .graphicsLayer { alpha = 1f - (abs(offsetX.value) / (threshold * 4)).coerceIn(0f, 0.5f) }
-            .pointerInput(music) {
+            .pointerInput(music, swipes) {
+                if (!swipes) return@pointerInput
                 detectDragGestures(
                     onDragEnd = {
                         val x = offsetX.value

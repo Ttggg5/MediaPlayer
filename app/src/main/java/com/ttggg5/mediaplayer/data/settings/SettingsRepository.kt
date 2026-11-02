@@ -22,6 +22,26 @@ data class SortSetting<T>(val field: T, val ascending: Boolean)
 /** How a library page lays out its items. */
 enum class ViewMode(val label: String) { LIST("List"), GRID("Grid"), COMPACT("Compact"), LARGE_GRID("Large") }
 
+/** Every gesture the app supports; each can be switched on or off on its own. */
+enum class Gesture(val label: String, val description: String, val video: Boolean) {
+    BRIGHTNESS("Brightness swipe", "Swipe up or down on the left third", true),
+    VOLUME("Volume swipe", "Swipe up or down on the right third", true),
+    SEEK("Seek swipe", "Swipe sideways to move through the video", true),
+    DOUBLE_TAP_SKIP("Double-tap to skip", "Double-tap the left or right side to jump back or forward", true),
+    DOUBLE_TAP_PLAY("Double-tap to pause", "Double-tap the middle to play or pause", true),
+    HOLD_SPEED("Hold for 2× speed", "Keep a finger on the screen to play faster", true),
+    PINCH_ZOOM("Pinch to zoom", "Pinch to switch between fit and crop", true),
+    SWIPE_CLOSE("Swipe down to close", "Swipe down in the middle to close the player", true),
+    MINI_PLAYER("Mini player swipes", "Swipe sideways to change song, up to open Now Playing", false),
+    NOW_PLAYING("Now Playing gestures", "Swipe down to close, swipe or double-tap the cover", false),
+    SONG_ROWS("Song row swipes", "Swipe right to play next, left to add to the queue", false),
+}
+
+/** Which gestures are switched on. */
+data class GestureSettings(val enabled: Set<Gesture> = Gesture.entries.toSet()) {
+    operator fun contains(gesture: Gesture): Boolean = gesture in enabled
+}
+
 /** Where the music pane goes in split-screen video playback. */
 enum class SplitLayout(val label: String) {
     AUTO("Automatic"),
@@ -93,6 +113,22 @@ class SettingsRepository(private val context: Context) {
     val videoViewMode: Flow<ViewMode> = context.dataStore.data.map { prefs ->
         prefs[VIDEO_VIEW]?.let { runCatching { ViewMode.valueOf(it) }.getOrNull() } ?: ViewMode.GRID
     }
+
+    val gestures: Flow<GestureSettings> = context.dataStore.data.map { prefs ->
+        // Before gestures could be set one by one, a single switch covered all video gestures.
+        val videoDefault = prefs[VIDEO_GESTURES] ?: true
+        GestureSettings(
+            Gesture.entries.filter { prefs[gestureKey(it)] ?: (if (it.video) videoDefault else true) }.toSet(),
+        )
+    }
+
+    suspend fun setGesture(gesture: Gesture, enabled: Boolean) = context.dataStore.edit { it[gestureKey(gesture)] = enabled }
+
+    suspend fun setGestures(gestures: Collection<Gesture>, enabled: Boolean) = context.dataStore.edit { prefs ->
+        gestures.forEach { prefs[gestureKey(it)] = enabled }
+    }
+
+    private fun gestureKey(gesture: Gesture) = booleanPreferencesKey("gesture_${gesture.name.lowercase()}")
 
     val splitLayout: Flow<SplitLayout> = context.dataStore.data.map { prefs ->
         prefs[SPLIT_LAYOUT]?.let { runCatching { SplitLayout.valueOf(it) }.getOrNull() } ?: SplitLayout.AUTO

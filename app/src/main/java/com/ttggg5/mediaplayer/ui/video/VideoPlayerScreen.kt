@@ -1,5 +1,7 @@
 package com.ttggg5.mediaplayer.ui.video
 
+import com.ttggg5.mediaplayer.ui.components.LocalGestureSettings
+import com.ttggg5.mediaplayer.data.settings.Gesture
 import com.ttggg5.mediaplayer.data.settings.SplitLayout
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.AlignVerticalTop
@@ -105,7 +107,7 @@ import kotlinx.coroutines.delay
 import java.util.Locale
 import kotlin.math.abs
 
-private enum class DragMode { NONE, SEEK, BRIGHTNESS, VOLUME, CLOSE }
+private enum class DragMode { NONE, IGNORED, SEEK, BRIGHTNESS, VOLUME, CLOSE }
 
 private data class GestureIndicator(val icon: ImageVector?, val text: String?, val level: Float?)
 
@@ -136,12 +138,12 @@ fun VideoPlayerScreen(
     player: ExoPlayer,
     inPictureInPicture: Boolean,
     host: VideoPlayerHost,
-    gesturesEnabled: Boolean,
     seekStepMs: Long,
     modifier: Modifier = Modifier,
     split: Boolean = false,
 ) {
     val stepLabel = "${seekStepMs / 1000}s"
+    val gestures = LocalGestureSettings.current
     fun seekBy(delta: Long) {
         val duration = player.duration.takeIf { it != C.TIME_UNSET } ?: Long.MAX_VALUE
         player.seekTo((player.currentPosition + delta).coerceIn(0L, duration))
@@ -226,10 +228,10 @@ fun VideoPlayerScreen(
             Box(
                 Modifier
                     .fillMaxSize()
-                    .pointerInput(player, gesturesEnabled) {
+                    .pointerInput(player, gestures) {
                         // Pinch: zoom in to crop/fill, out to fit. Only with two fingers; those events are
                         // consumed so the one-finger drags below do not also react.
-                        if (!gesturesEnabled) return@pointerInput
+                        if (Gesture.PINCH_ZOOM !in gestures) return@pointerInput
                         awaitEachGesture {
                             var zoom = 1f
                             var pinching = false
@@ -254,10 +256,14 @@ fun VideoPlayerScreen(
                             }
                         }
                     }
-                    .pointerInput(player, gesturesEnabled, seekStepMs) {
-                        if (gesturesEnabled) {
+                    .pointerInput(player, gestures, seekStepMs) {
+                        val hold = Gesture.HOLD_SPEED in gestures
+                        val skip = Gesture.DOUBLE_TAP_SKIP in gestures
+                        val playPause = Gesture.DOUBLE_TAP_PLAY in gestures
+                        if (hold || skip || playPause) {
                             detectTapGestures(
                                 onPress = {
+                                    if (!hold) return@detectTapGestures
                                     // Hold to play at 2x until the finger lifts.
                                     val boost = scope.launch {
                                         delay(BOOST_DELAY_MS)
@@ -282,17 +288,21 @@ fun VideoPlayerScreen(
                                         touch()
                                     }
                                 },
-                                onDoubleTap = { offset ->
+                                // Without any double-tap gesture, single taps should not wait for a second tap.
+                                onDoubleTap = if (!skip && !playPause) null else { offset ->
+                                    val left = offset.x < size.width / 3f
+                                    val right = offset.x > size.width * 2f / 3f
                                     when {
-                                        offset.x < size.width / 3f -> {
+                                        skip && left -> {
                                             seekBy(-seekStepMs)
                                             indicator = GestureIndicator(Icons.Rounded.FastRewind, "-$stepLabel", null)
                                         }
-                                        offset.x > size.width * 2f / 3f -> {
+                                        skip && right -> {
                                             seekBy(seekStepMs)
                                             indicator = GestureIndicator(Icons.Rounded.FastForward, "+$stepLabel", null)
                                         }
-                                        else -> {
+                                        // With skipping off the whole screen toggles play/pause.
+                                        playPause && (!skip || (!left && !right)) -> {
                                             if (player.isPlaying) player.pause() else player.play()
                                             indicator = GestureIndicator(
                                                 if (player.isPlaying) Icons.Rounded.PlayArrow else Icons.Rounded.Pause,
@@ -307,8 +317,9 @@ fun VideoPlayerScreen(
                             detectTapGestures(onTap = { controlsVisible = !controlsVisible; touch() })
                         }
                     }
-                    .pointerInput(player, gesturesEnabled) {
-                        if (!gesturesEnabled) return@pointerInput
+                    .pointerInput(player, gestures) {
+                        val dragGestures = listOf(Gesture.SEEK, Gesture.BRIGHTNESS, Gesture.VOLUME, Gesture.SWIPE_CLOSE)
+                        if (dragGestures.none { it in gestures }) return@pointerInput
                         var mode = DragMode.NONE
                         var total = Offset.Zero
                         var startX = 0f
@@ -340,6 +351,13 @@ fun VideoPlayerScreen(
                                         startX > size.width * 2f / 3f -> DragMode.VOLUME
                                         else -> DragMode.CLOSE
                                     }
+                                    val wanted = when (mode) {
+                                        DragMode.SEEK -> Gesture.SEEK
+                                        DragMode.BRIGHTNESS -> Gesture.BRIGHTNESS
+                                        DragMode.VOLUME -> Gesture.VOLUME
+                                        else -> Gesture.SWIPE_CLOSE
+                                    }
+                                    if (wanted !in gestures) mode = DragMode.IGNORED
                                     startPosition = player.currentPosition
                                     startLevel = when (mode) {
                                         DragMode.BRIGHTNESS -> host.getBrightness()
@@ -378,7 +396,7 @@ fun VideoPlayerScreen(
                                             null,
                                         ).takeIf { total.y > 0 }
                                     }
-                                    DragMode.NONE -> Unit
+                                    DragMode.NONE, DragMode.IGNORED -> Unit
                                 }
                             },
                         )
