@@ -526,71 +526,18 @@ fun VideoPlayerScreen(
                         }
                     }
 
-                    // Center transport controls.
-                    // Smaller controls in split mode so they fit a short pane.
-                    val iconSize = if (split) 30 else 40
-                    Row(
-                        Modifier.align(Alignment.Center),
-                        horizontalArrangement = Arrangement.spacedBy(if (split) 8.dp else 20.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        if (!split || hasPrevious) {
-                            ControlIcon(Icons.Rounded.SkipPrevious, "Previous", enabled = hasPrevious, size = iconSize) {
-                                player.seekToPreviousMediaItem(); touch()
-                            }
-                        }
-                        ControlIcon(Icons.Rounded.FastRewind, "Back $stepLabel", size = iconSize) { seekBy(-seekStepMs); touch() }
-                        FilledIconButton(
-                            onClick = {
-                                if (player.isPlaying) {
-                                    player.pause()
-                                } else {
-                                    if (player.playbackState == Player.STATE_ENDED) player.seekToDefaultPosition()
-                                    if (player.playbackState == Player.STATE_IDLE) player.prepare()
-                                    player.play()
-                                }
-                                touch()
-                            },
-                            modifier = Modifier.size(if (split) 56.dp else 72.dp),
-                            colors = IconButtonDefaults.filledIconButtonColors(
-                                containerColor = Color.White.copy(alpha = 0.2f),
-                                contentColor = Color.White,
-                            ),
-                        ) {
-                            Icon(
-                                if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
-                                if (isPlaying) "Pause" else "Play",
-                                Modifier.size(if (split) 34.dp else 44.dp),
-                            )
-                        }
-                        ControlIcon(Icons.Rounded.FastForward, "Forward $stepLabel", size = iconSize) { seekBy(seekStepMs); touch() }
-                        if (!split || hasNext) {
-                            ControlIcon(Icons.Rounded.SkipNext, "Next", enabled = hasNext, size = iconSize) {
-                                player.seekToNextMediaItem(); touch()
-                            }
-                        }
-                    }
-
-                    // Bottom seek bar.
+                    // Bottom panel: timeline, then the playback controls.
+                    val iconSize = if (split) 24 else 28
                     Column(
                         Modifier
                             .align(Alignment.BottomCenter)
                             .fillMaxWidth()
-                            .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.7f))))
+                            .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.75f))))
                             .safeDrawingPadding()
-                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                            .padding(horizontal = 16.dp, vertical = 4.dp),
                     ) {
                         val dur = duration.coerceAtLeast(1L)
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            ToggleIcon(Icons.Rounded.Shuffle, "Shuffle", active = shuffle) {
-                                player.shuffleModeEnabled = !player.shuffleModeEnabled
-                                indicator = GestureIndicator(
-                                    Icons.Rounded.Shuffle,
-                                    if (player.shuffleModeEnabled) "Shuffle on" else "Shuffle off",
-                                    null,
-                                )
-                                touch()
-                            }
                             Text(
                                 formatDuration(if (scrubbing) (scrubValue * dur).toLong() else position),
                                 color = Color.White,
@@ -617,6 +564,64 @@ fun VideoPlayerScreen(
                                 modifier = Modifier.weight(1f).padding(horizontal = 12.dp),
                             )
                             Text(formatDuration(duration), color = Color.White, style = MaterialTheme.typography.labelMedium)
+                        }
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            ToggleIcon(Icons.Rounded.Shuffle, "Shuffle", active = shuffle) {
+                                player.shuffleModeEnabled = !player.shuffleModeEnabled
+                                indicator = GestureIndicator(
+                                    Icons.Rounded.Shuffle,
+                                    if (player.shuffleModeEnabled) "Shuffle on" else "Shuffle off",
+                                    null,
+                                )
+                                touch()
+                            }
+                            Row(
+                                Modifier.weight(1f),
+                                horizontalArrangement = Arrangement.spacedBy(
+                                    if (split) 4.dp else 12.dp,
+                                    Alignment.CenterHorizontally,
+                                ),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                if (!split || hasPrevious) {
+                                    ControlIcon(Icons.Rounded.SkipPrevious, "Previous", enabled = hasPrevious, size = iconSize) {
+                                        player.seekToPreviousMediaItem(); touch()
+                                    }
+                                }
+                                ControlIcon(Icons.Rounded.FastRewind, "Back $stepLabel", size = iconSize) { seekBy(-seekStepMs); touch() }
+                                FilledIconButton(
+                                    onClick = {
+                                        if (player.isPlaying) {
+                                            player.pause()
+                                        } else {
+                                            if (player.playbackState == Player.STATE_ENDED) player.seekToDefaultPosition()
+                                            if (player.playbackState == Player.STATE_IDLE) player.prepare()
+                                            player.play()
+                                        }
+                                        touch()
+                                    },
+                                    modifier = Modifier.size(if (split) 44.dp else 52.dp),
+                                    colors = IconButtonDefaults.filledIconButtonColors(
+                                        containerColor = Color.White.copy(alpha = 0.2f),
+                                        contentColor = Color.White,
+                                    ),
+                                ) {
+                                    Icon(
+                                        if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+                                        if (isPlaying) "Pause" else "Play",
+                                        Modifier.size(if (split) 26.dp else 32.dp),
+                                    )
+                                }
+                                ControlIcon(Icons.Rounded.FastForward, "Forward $stepLabel", size = iconSize) { seekBy(seekStepMs); touch() }
+                                if (!split || hasNext) {
+                                    ControlIcon(Icons.Rounded.SkipNext, "Next", enabled = hasNext, size = iconSize) {
+                                        player.seekToNextMediaItem(); touch()
+                                    }
+                                }
+                            }
                             ToggleIcon(
                                 if (repeatMode == Player.REPEAT_MODE_ONE) Icons.Rounded.RepeatOne else Icons.Rounded.Repeat,
                                 "Repeat",
