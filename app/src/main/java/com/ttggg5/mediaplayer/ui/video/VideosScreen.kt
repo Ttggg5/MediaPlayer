@@ -39,11 +39,14 @@ import com.ttggg5.mediaplayer.ui.components.EmptyState
 import com.ttggg5.mediaplayer.ui.components.FolderBrowser
 import com.ttggg5.mediaplayer.ui.components.FolderModeChips
 import com.ttggg5.mediaplayer.ui.components.LibraryPage
+import com.ttggg5.mediaplayer.ui.components.LocalFileActions
 import com.ttggg5.mediaplayer.ui.components.MediaCollection
 import com.ttggg5.mediaplayer.ui.components.MediaItemUi
+import com.ttggg5.mediaplayer.ui.components.MenuAction
 import com.ttggg5.mediaplayer.ui.components.ScreenScaffold
 import com.ttggg5.mediaplayer.ui.components.ThumbShape
 import com.ttggg5.mediaplayer.ui.components.ViewOptionsSheet
+import com.ttggg5.mediaplayer.ui.components.fileTarget
 import com.ttggg5.mediaplayer.ui.components.formatDuration
 import com.ttggg5.mediaplayer.ui.components.formatSize
 import com.ttggg5.mediaplayer.ui.music.countLabel
@@ -62,6 +65,7 @@ fun VideosScreen(vm: LibraryViewModel, onOpenFolder: (String) -> Unit, onOpenSet
     val tree by vm.videoFolderTree.collectAsStateWithLifecycle()
     var tab by rememberSaveable { mutableIntStateOf(0) }
     var showOptions by remember { mutableStateOf(false) }
+    val files = LocalFileActions.current
 
     LibraryPage(
         title = "Videos",
@@ -90,7 +94,9 @@ fun VideosScreen(vm: LibraryViewModel, onOpenFolder: (String) -> Unit, onOpenSet
                         mode = mode,
                         noun = "video",
                         toItem = { video, index, folderVideos ->
-                            video.toItem(key = "file:${video.id}") { playVideos(context, folderVideos, index) }
+                            video.toItem(key = "file:${video.id}", menu = files?.menuFor(video.fileTarget()).orEmpty()) {
+                                playVideos(context, folderVideos, index)
+                            }
                         },
                         onPlayAll = { playVideos(context, it, 0) },
                         onShuffle = { playVideos(context, it, 0, shuffle = true) },
@@ -168,8 +174,11 @@ fun VideoFolderScreen(vm: LibraryViewModel, path: String, onBack: () -> Unit) {
 @Composable
 private fun VideoList(videos: List<VideoItem>, mode: ViewMode) {
     val context = LocalContext.current
+    val files = LocalFileActions.current
     MediaCollection(
-        items = videos.mapIndexed { index, video -> video.toItem { playVideos(context, videos, index) } },
+        items = videos.mapIndexed { index, video ->
+            video.toItem(menu = files?.menuFor(video.fileTarget()).orEmpty()) { playVideos(context, videos, index) }
+        },
         mode = mode,
         header = {
             CollectionHeader(
@@ -182,7 +191,7 @@ private fun VideoList(videos: List<VideoItem>, mode: ViewMode) {
 }
 
 /** A video as a library item, for any view mode. */
-private fun VideoItem.toItem(key: Any = id, onClick: () -> Unit) = MediaItemUi(
+private fun VideoItem.toItem(key: Any = id, menu: List<MenuAction> = emptyList(), onClick: () -> Unit) = MediaItemUi(
     key = key,
     title = title,
     subtitle = buildString {
@@ -193,6 +202,7 @@ private fun VideoItem.toItem(key: Any = id, onClick: () -> Unit) = MediaItemUi(
     shape = ThumbShape.WIDE,
     placeholder = Icons.Rounded.Movie,
     trailing = formatDuration(durationMs),
+    menu = menu,
     onClick = onClick,
 )
 

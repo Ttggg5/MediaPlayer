@@ -77,6 +77,8 @@ import androidx.navigation.navArgument
 import com.ttggg5.mediaplayer.AppContainer
 import com.ttggg5.mediaplayer.data.media.AudioTrack
 import com.ttggg5.mediaplayer.ui.LibraryViewModel
+import com.ttggg5.mediaplayer.ui.components.LocalFileActions
+import com.ttggg5.mediaplayer.ui.components.fileTarget
 import com.ttggg5.mediaplayer.ui.music.ExtraSongAction
 import com.ttggg5.mediaplayer.ui.music.MusicScreen
 import com.ttggg5.mediaplayer.ui.music.SongActions
@@ -132,7 +134,8 @@ fun MainScreen(container: AppContainer, openNowPlayingRequests: Int) {
         if (openNowPlayingRequests > 0) nowPlayingOpen = true
     }
 
-    val songActions = remember(music) {
+    val fileActions = LocalFileActions.current
+    val songActions = remember(music, fileActions) {
         SongActions(
             onPlayNext = {
                 music.playNext(listOf(it))
@@ -143,6 +146,7 @@ fun MainScreen(container: AppContainer, openNowPlayingRequests: Int) {
                 Toast.makeText(context, "Added to queue", Toast.LENGTH_SHORT).show()
             },
             onAddToPlaylist = { addToPlaylist = listOf(it) },
+            fileMenu = fileActions?.let { files -> { track: AudioTrack -> files.menuFor(track.fileTarget()) } },
         )
     }
 

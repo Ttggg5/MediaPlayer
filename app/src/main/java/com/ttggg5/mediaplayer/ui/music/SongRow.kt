@@ -17,6 +17,8 @@ class SongActions(
     val onPlayNext: (AudioTrack) -> Unit,
     val onAddToQueue: (AudioTrack) -> Unit,
     val onAddToPlaylist: ((AudioTrack) -> Unit)? = null,
+    /** "Rename" / "Delete" entries for the song's file, where editing files is offered. */
+    val fileMenu: ((AudioTrack) -> List<MenuAction>)? = null,
 )
 
 data class ExtraSongAction(val label: String, val icon: ImageVector, val onClick: (AudioTrack) -> Unit)
@@ -35,6 +37,7 @@ fun AudioTrack.toItem(
         add(MenuAction("Add to queue", Icons.AutoMirrored.Rounded.QueueMusic) { actions.onAddToQueue(track) })
         actions.onAddToPlaylist?.let { add(MenuAction("Add to playlist", Icons.AutoMirrored.Rounded.PlaylistAdd) { it(track) }) }
         extraActions.forEach { extra -> add(MenuAction(extra.label, extra.icon) { extra.onClick(track) }) }
+        actions.fileMenu?.let { addAll(it(track)) }
     }
     return MediaItemUi(
         key = key,

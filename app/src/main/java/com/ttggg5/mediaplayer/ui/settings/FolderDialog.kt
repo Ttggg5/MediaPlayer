@@ -57,9 +57,13 @@ fun FolderDialog(
             null
         }
         if (key != null) {
-            // Keep read access so the folder can be scanned directly, even where MediaStore does not look.
-            runCatching {
-                context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            // Keep access so the folder can be scanned directly (even where MediaStore does not look),
+            // and its files renamed or deleted from the app. Fall back to read-only if write is refused.
+            val readWrite = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+            runCatching { context.contentResolver.takePersistableUriPermission(uri, readWrite) }.onFailure {
+                runCatching {
+                    context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
             }
             onAdd(uri.toString())
         } else {
