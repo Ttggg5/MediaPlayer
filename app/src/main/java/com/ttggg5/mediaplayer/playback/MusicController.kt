@@ -57,6 +57,8 @@ class MusicController(context: Context) {
             c.addListener(listener)
             publish(c)
         }
+        // The boost above 100% lives outside the player; republish when it changes.
+        scope.launch { MusicBoost.gain.collect { controller?.let(::publish) } }
     }
 
     private fun publish(player: Player) {
@@ -69,7 +71,7 @@ class MusicController(context: Context) {
             repeatMode = player.repeatMode,
             queue = queue,
             currentIndex = player.currentMediaItemIndex,
-            volume = player.volume,
+            volume = player.volume + (MusicBoost.gain.value - 1f),
         )
     }
 
@@ -137,8 +139,15 @@ class MusicController(context: Context) {
 
     fun pause() = withController { it.pause() }
 
-    /** Volume of the music player itself (0–1), independent of the system volume. */
-    fun setVolume(volume: Float) = withController { it.volume = volume.coerceIn(0f, 1f) }
+    /**
+     * Volume of the music player itself (0–[MAX_VOLUME]), independent of the system volume.
+     * Above 1 the player stays at full volume and [MusicBoost] makes it louder.
+     */
+    fun setVolume(volume: Float) {
+        val level = volume.coerceIn(0f, MAX_VOLUME)
+        MusicBoost.gain.value = level.coerceAtLeast(1f)
+        withController { it.volume = level.coerceAtMost(1f) }
+    }
 
     companion object {
         fun uriMediaItem(uri: Uri, title: String?): MediaItem =

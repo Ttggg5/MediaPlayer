@@ -2,6 +2,9 @@
 
 package com.ttggg5.mediaplayer.ui.video
 
+import com.ttggg5.mediaplayer.playback.MAX_VOLUME
+import com.ttggg5.mediaplayer.playback.VolumeBoost
+import kotlin.math.roundToInt
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.clickable
@@ -79,7 +82,7 @@ import kotlinx.coroutines.delay
 
 /** Music player shown next to a video in split mode, with a volume mix for both. */
 @Composable
-fun MusicPane(container: AppContainer, videoPlayer: ExoPlayer, modifier: Modifier = Modifier) {
+fun MusicPane(container: AppContainer, videoPlayer: ExoPlayer, videoBoost: VolumeBoost, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val music = container.musicController
     val state by music.state.collectAsStateWithLifecycle()
@@ -107,7 +110,7 @@ fun MusicPane(container: AppContainer, videoPlayer: ExoPlayer, modifier: Modifie
             Surface(color = MaterialTheme.colorScheme.surfaceContainer) {
                 Column {
                     NowPlayingCard(state, music, mixerOpen, onToggleMixer = { mixerOpen = !mixerOpen })
-                    AnimatedVisibility(visible = mixerOpen) { Mixer(state, music, videoPlayer) }
+                    AnimatedVisibility(visible = mixerOpen) { Mixer(state, music, videoPlayer, videoBoost) }
                 }
             }
             PrimaryTabRow(selectedTabIndex = tab, containerColor = MaterialTheme.colorScheme.surface) {
@@ -244,28 +247,35 @@ private fun ModeToggle(icon: ImageVector, description: String, active: Boolean, 
 
 /** Separate volume sliders for the video and the music, so the two can be mixed. */
 @Composable
-private fun Mixer(state: MusicState, music: MusicController, videoPlayer: ExoPlayer) {
-    var videoVolume by remember { mutableFloatStateOf(videoPlayer.volume) }
+private fun Mixer(state: MusicState, music: MusicController, videoPlayer: ExoPlayer, videoBoost: VolumeBoost) {
+    var videoVolume by remember { mutableFloatStateOf(videoPlayer.volume + (videoBoost.gain - 1f)) }
     var musicVolume by remember { mutableFloatStateOf(state.volume) }
     LaunchedEffect(state.volume) { musicVolume = state.volume }
 
     Column(Modifier.padding(horizontal = 16.dp).padding(bottom = 8.dp)) {
-        VolumeRow(Icons.Rounded.Movie, "Video", videoVolume) { videoVolume = it; videoPlayer.volume = it }
+        VolumeRow(Icons.Rounded.Movie, "Video", videoVolume) {
+            videoVolume = it
+            videoPlayer.volume = it.coerceAtMost(1f)
+            videoBoost.gain = it.coerceAtLeast(1f)
+        }
         VolumeRow(Icons.Rounded.MusicNote, "Music", musicVolume) { musicVolume = it; music.setVolume(it) }
     }
 }
 
 @Composable
-private fun VolumeRow(icon: ImageVector, label: String, value: Float, onChange: (Float) -> Unit) {
+fun VolumeRow(icon: ImageVector, label: String, value: Float, onChange: (Float) -> Unit) {
+    // 0–200%: above 100% the sound is boosted, shown in the accent colour.
+    val boosted = value > 1.005f
+    val accent = if (boosted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
     Row(verticalAlignment = Alignment.CenterVertically) {
         Icon(icon, null, Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
         Text(label, style = MaterialTheme.typography.labelLarge, modifier = Modifier.width(56.dp).padding(start = 8.dp))
-        Slider(value = value, onValueChange = onChange, modifier = Modifier.weight(1f))
+        Slider(value = value, onValueChange = onChange, valueRange = 0f..MAX_VOLUME, modifier = Modifier.weight(1f))
         Text(
-            "${(value * 100).toInt()}%",
+            "${(value * 100).roundToInt()}%",
             style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.width(44.dp).padding(start = 8.dp),
+            color = accent,
+            modifier = Modifier.width(48.dp).padding(start = 8.dp),
         )
     }
 }

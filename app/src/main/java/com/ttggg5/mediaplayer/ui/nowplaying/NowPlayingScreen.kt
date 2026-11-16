@@ -2,6 +2,10 @@
 
 package com.ttggg5.mediaplayer.ui.nowplaying
 
+import com.ttggg5.mediaplayer.playback.MAX_VOLUME
+import androidx.compose.material.icons.automirrored.rounded.VolumeOff
+import androidx.compose.material.icons.automirrored.rounded.VolumeUp
+import androidx.compose.foundation.layout.width
 import com.ttggg5.mediaplayer.ui.components.LocalGestureSettings
 import com.ttggg5.mediaplayer.data.settings.Gesture
 import androidx.compose.animation.core.Animatable
@@ -298,6 +302,7 @@ fun NowPlayingScreen(
                             )
                         }
                     }
+                    MusicVolume(state, music)
                     }
                 }
 
@@ -385,5 +390,34 @@ private fun QueueSheet(state: MusicState, music: MusicController, onDismiss: () 
                 )
             }
         }
+    }
+}
+
+/** Music volume, 0–200%: above 100% the sound is boosted (shown in the accent colour). */
+@Composable
+private fun MusicVolume(state: MusicState, music: MusicController) {
+    var volume by remember { mutableFloatStateOf(state.volume) }
+    LaunchedEffect(state.volume) { volume = state.volume }
+    val boosted = volume > 1.005f
+    val tint = if (boosted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Icon(
+            if (volume <= 0.001f) Icons.AutoMirrored.Rounded.VolumeOff else Icons.AutoMirrored.Rounded.VolumeUp,
+            "Volume",
+            Modifier.size(20.dp),
+            tint = tint,
+        )
+        Slider(
+            value = volume,
+            onValueChange = { volume = it; music.setVolume(it) },
+            valueRange = 0f..MAX_VOLUME,
+            modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
+        )
+        Text(
+            "${(volume * 100).roundToInt()}%",
+            style = MaterialTheme.typography.labelMedium,
+            color = tint,
+            modifier = Modifier.width(44.dp),
+        )
     }
 }

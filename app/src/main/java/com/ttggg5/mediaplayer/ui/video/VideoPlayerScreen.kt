@@ -1,5 +1,7 @@
 package com.ttggg5.mediaplayer.ui.video
 
+import kotlin.math.roundToInt
+import com.ttggg5.mediaplayer.playback.MAX_VOLUME
 import com.ttggg5.mediaplayer.ui.components.LocalGestureSettings
 import com.ttggg5.mediaplayer.data.settings.Gesture
 import com.ttggg5.mediaplayer.data.settings.SplitLayout
@@ -424,9 +426,14 @@ fun VideoPlayerScreen(
                                         indicator = GestureIndicator(Icons.Rounded.BrightnessMedium, null, level)
                                     }
                                     DragMode.VOLUME -> {
-                                        val level = (startLevel - total.y / (size.height * 0.8f)).coerceIn(0f, 1f)
+                                        // 0–100% is the system volume; keep swiping up to boost to 200%.
+                                        val level = (startLevel - total.y / (size.height * 0.45f)).coerceIn(0f, MAX_VOLUME)
                                         host.setVolume(level)
-                                        indicator = GestureIndicator(Icons.AutoMirrored.Rounded.VolumeUp, null, level)
+                                        indicator = GestureIndicator(
+                                            Icons.AutoMirrored.Rounded.VolumeUp,
+                                            "${(level * 100).roundToInt()}%",
+                                            level / MAX_VOLUME,
+                                        )
                                     }
                                     DragMode.CLOSE -> {
                                         val ready = total.y > size.height * CLOSE_FRACTION

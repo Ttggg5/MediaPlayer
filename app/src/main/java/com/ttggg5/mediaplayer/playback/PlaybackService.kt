@@ -11,6 +11,9 @@ import androidx.media3.session.MediaSessionService
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
 import com.ttggg5.mediaplayer.MainActivity
+import kotlinx.coroutines.MainScope
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 
 /**
  * Hosts the music player so playback continues in the background. Media3 builds the
@@ -19,6 +22,8 @@ import com.ttggg5.mediaplayer.MainActivity
 class PlaybackService : MediaSessionService() {
 
     private var mediaSession: MediaSession? = null
+    private var boost: VolumeBoost? = null
+    private val scope = MainScope()
 
     override fun onCreate() {
         super.onCreate()
@@ -33,6 +38,9 @@ class PlaybackService : MediaSessionService() {
             .setHandleAudioBecomingNoisy(true)
             .setWakeMode(C.WAKE_MODE_NETWORK)
             .build()
+        // Volume above 100% (set from the UI through MusicBoost).
+        val volumeBoost = VolumeBoost(player).also { boost = it }
+        scope.launch { MusicBoost.gain.collect { volumeBoost.gain = it } }
 
         val openApp = PendingIntent.getActivity(
             this,
@@ -60,6 +68,9 @@ class PlaybackService : MediaSessionService() {
     }
 
     override fun onDestroy() {
+        scope.cancel()
+        boost?.destroy()
+        boost = null
         mediaSession?.run {
             player.release()
             release()

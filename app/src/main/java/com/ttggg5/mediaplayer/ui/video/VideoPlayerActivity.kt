@@ -1,5 +1,7 @@
 package com.ttggg5.mediaplayer.ui.video
 
+import com.ttggg5.mediaplayer.playback.MAX_VOLUME
+import com.ttggg5.mediaplayer.playback.VolumeBoost
 import com.ttggg5.mediaplayer.ui.components.LocalGestureSettings
 import com.ttggg5.mediaplayer.data.settings.GestureSettings
 import androidx.compose.runtime.CompositionLocalProvider
@@ -52,6 +54,7 @@ import kotlinx.coroutines.launch
 class VideoPlayerActivity : ComponentActivity(), VideoPlayerHost {
 
     private lateinit var player: ExoPlayer
+    private lateinit var videoBoost: VolumeBoost
     private val inPictureInPicture = mutableStateOf(false)
     private var orientationChosen = false
 
@@ -85,6 +88,7 @@ class VideoPlayerActivity : ComponentActivity(), VideoPlayerHost {
             .setAudioAttributes(VIDEO_AUDIO, /* handleAudioFocus = */ !splitMode.value)
             .setHandleAudioBecomingNoisy(true)
             .build()
+        videoBoost = VolumeBoost(player)
         player.addListener(object : Player.Listener {
             override fun onIsPlayingChanged(isPlaying: Boolean) = updatePipParams()
 
@@ -145,7 +149,7 @@ class VideoPlayerActivity : ComponentActivity(), VideoPlayerHost {
                             split = split,
                         )
                     },
-                    other = { modifier -> MusicPane(container, player, modifier) },
+                    other = { modifier -> MusicPane(container, player, videoBoost, modifier) },
                 )
               }
             }
@@ -273,6 +277,7 @@ class VideoPlayerActivity : ComponentActivity(), VideoPlayerHost {
     }
 
     override fun onDestroy() {
+        videoBoost.destroy()
         player.release()
         super.onDestroy()
     }
@@ -326,14 +331,17 @@ class VideoPlayerActivity : ComponentActivity(), VideoPlayerHost {
         window.attributes = window.attributes.apply { screenBrightness = value.coerceIn(0.01f, 1f) }
     }
 
+    /** 0–1 is the system media volume; above that (up to 2) the video is boosted. */
     override fun getVolume(): Float {
         val max = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC).coerceAtLeast(1)
-        return audioManager.getStreamVolume(AudioManager.STREAM_MUSIC).toFloat() / max
+        val system = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC).toFloat() / max
+        return if (system >= 1f) 1f + (videoBoost.gain - 1f) else system
     }
 
     override fun setVolume(value: Float) {
         val max = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
         audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, (value.coerceIn(0f, 1f) * max).toInt(), 0)
+        videoBoost.gain = value.coerceIn(1f, MAX_VOLUME)
     }
 
     override val pipSupported: Boolean get() = supportsPip
