@@ -1,5 +1,7 @@
 package com.ttggg5.mediaplayer.ui.video
 
+import androidx.media3.common.util.UnstableApi
+import androidx.annotation.OptIn
 import com.ttggg5.mediaplayer.playback.MAX_VOLUME
 import com.ttggg5.mediaplayer.playback.VolumeBoost
 import com.ttggg5.mediaplayer.ui.components.LocalGestureSettings
@@ -77,18 +79,20 @@ class VideoPlayerActivity : ComponentActivity(), VideoPlayerHost {
         packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)
     }
 
+    @OptIn(UnstableApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         WindowCompat.setDecorFitsSystemWindows(window, false)
         hideSystemBars()
 
         splitMode.value = savedInstanceState?.getBoolean(STATE_SPLIT) ?: false
-        player = ExoPlayer.Builder(this)
+        videoBoost = VolumeBoost(this)
+        // The boost's renderers factory adds the gain stage used for volume above 100%.
+        player = ExoPlayer.Builder(this, videoBoost.renderersFactory)
             // In split mode the video must not take audio focus, or it would pause the music.
             .setAudioAttributes(VIDEO_AUDIO, /* handleAudioFocus = */ !splitMode.value)
             .setHandleAudioBecomingNoisy(true)
             .build()
-        videoBoost = VolumeBoost(player)
         player.addListener(object : Player.Listener {
             override fun onIsPlayingChanged(isPlaying: Boolean) = updatePipParams()
 

@@ -1,5 +1,7 @@
 package com.ttggg5.mediaplayer.playback
 
+import androidx.media3.common.util.UnstableApi
+import androidx.annotation.OptIn
 import android.app.PendingIntent
 import android.content.Intent
 import androidx.media3.common.AudioAttributes
@@ -25,9 +27,12 @@ class PlaybackService : MediaSessionService() {
     private var boost: VolumeBoost? = null
     private val scope = MainScope()
 
+    @OptIn(UnstableApi::class)
     override fun onCreate() {
         super.onCreate()
-        val player = ExoPlayer.Builder(this)
+        // The boost's renderers factory adds the gain stage used for volume above 100%.
+        val volumeBoost = VolumeBoost(this).also { boost = it }
+        val player = ExoPlayer.Builder(this, volumeBoost.renderersFactory)
             .setAudioAttributes(
                 AudioAttributes.Builder()
                     .setUsage(C.USAGE_MEDIA)
@@ -39,7 +44,6 @@ class PlaybackService : MediaSessionService() {
             .setWakeMode(C.WAKE_MODE_NETWORK)
             .build()
         // Volume above 100% (set from the UI through MusicBoost).
-        val volumeBoost = VolumeBoost(player).also { boost = it }
         scope.launch { MusicBoost.gain.collect { volumeBoost.gain = it } }
 
         val openApp = PendingIntent.getActivity(
