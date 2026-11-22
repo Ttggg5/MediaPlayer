@@ -2,6 +2,9 @@
 
 package com.ttggg5.mediaplayer.ui.video
 
+import com.ttggg5.mediaplayer.data.media.AudioTrack
+import com.ttggg5.mediaplayer.ui.components.fileTarget
+import com.ttggg5.mediaplayer.ui.components.LocalFileActions
 import com.ttggg5.mediaplayer.playback.MAX_VOLUME
 import com.ttggg5.mediaplayer.playback.VolumeBoost
 import kotlin.math.roundToInt
@@ -92,7 +95,8 @@ fun MusicPane(container: AppContainer, videoPlayer: ExoPlayer, videoBoost: Volum
     var tab by rememberSaveable { mutableIntStateOf(0) }
     var mixerOpen by rememberSaveable { mutableStateOf(false) }
 
-    val actions = remember(music) {
+    val fileActions = LocalFileActions.current
+    val actions = remember(music, fileActions) {
         SongActions(
             onPlayNext = {
                 music.playNext(listOf(it))
@@ -102,6 +106,7 @@ fun MusicPane(container: AppContainer, videoPlayer: ExoPlayer, videoBoost: Volum
                 music.addToQueue(listOf(it))
                 Toast.makeText(context, "Added to queue", Toast.LENGTH_SHORT).show()
             },
+            fileMenu = fileActions?.let { files -> { track: AudioTrack -> files.menuFor(track.fileTarget()) } },
         )
     }
 

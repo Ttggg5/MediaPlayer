@@ -1,6 +1,7 @@
 package com.ttggg5.mediaplayer
 
 import com.ttggg5.mediaplayer.ui.components.FileActionsHost
+import com.ttggg5.mediaplayer.ui.components.fileTarget
 import com.ttggg5.mediaplayer.ui.components.LocalGestureSettings
 import com.ttggg5.mediaplayer.data.settings.GestureSettings
 import androidx.compose.runtime.CompositionLocalProvider
@@ -51,7 +52,12 @@ class MainActivity : ComponentActivity() {
             MediaPlayerTheme(darkTheme = darkTheme, dynamicColor = settings.dynamicColor) {
                 CompositionLocalProvider(LocalGestureSettings provides gestures) {
                     PermissionGate {
-                        FileActionsHost(onChanged = container.mediaRepository::refresh) {
+                        FileActionsHost(
+                            onChanged = container.mediaRepository::refresh,
+                            lookup = container.mediaRepository::fileTarget,
+                            onDeleted = container.musicController::fileDeleted,
+                            onRenamed = { old, new, name -> container.musicController.fileRenamed(old, new, name) },
+                        ) {
                             MainScreen(container, openNowPlaying.intValue)
                         }
                     }

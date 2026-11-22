@@ -37,6 +37,7 @@ import androidx.core.content.ContextCompat
 import com.ttggg5.mediaplayer.data.media.AudioTrack
 import com.ttggg5.mediaplayer.data.media.FileOperations
 import com.ttggg5.mediaplayer.data.media.FileResult
+import com.ttggg5.mediaplayer.data.media.MediaRepository
 import com.ttggg5.mediaplayer.data.media.VideoItem
 import com.ttggg5.mediaplayer.data.media.isValidFileName
 import com.ttggg5.mediaplayer.data.media.splitExtension
@@ -51,18 +52,33 @@ fun AudioTrack.fileTarget() = FileTarget(uri, title, fileName, filePath)
 
 fun VideoItem.fileTarget() = FileTarget(uri, title, fileName, filePath)
 
+/** The library's song or video with this URI, if it lists one. */
+fun MediaRepository.fileTarget(uri: Uri): FileTarget? =
+    allSongs.value.firstOrNull { it.uri == uri }?.fileTarget()
+        ?: allVideos.value.firstOrNull { it.uri == uri }?.fileTarget()
+
 /** Opens the rename / delete flows; provided by [FileActionsHost]. */
 @Stable
 class FileActions internal constructor() {
     internal var renaming by mutableStateOf<FileTarget?>(null)
     internal var deleting by mutableStateOf<FileTarget?>(null)
     internal var startDelete: (FileTarget) -> Unit = {}
+    internal var lookup: (Uri) -> FileTarget? = { null }
 
     fun rename(target: FileTarget) {
         renaming = target
     }
 
     fun delete(target: FileTarget) = startDelete(target)
+
+    /**
+     * The library entry for [uri] (with its real file name and path) or, for a file the library
+     * doesn't list, a target built from what's known. Null for streams, which can't be edited.
+     */
+    fun targetFor(uri: Uri?, title: String): FileTarget? {
+        if (uri == null || uri.scheme != "content") return null
+        return lookup(uri) ?: FileTarget(uri, title, "", "")
+    }
 
     /** "Rename" and "Delete" entries for an item's ⋮ menu. */
     fun menuFor(target: FileTarget): List<MenuAction> = listOf(
@@ -81,7 +97,14 @@ private class PendingOps {
 
 /** Provides [LocalFileActions] to [content] and shows the rename / delete dialogs. */
 @Composable
-fun FileActionsHost(onChanged: () -> Unit, content: @Composable () -> Unit) {
+fun FileActionsHost(
+    onChanged: () -> Unit,
+    lookup: (Uri) -> FileTarget? = { null },
+    onDeleted: (Uri) -> Unit = {},
+    /** [new] is the file's URI after the rename (the same URI for MediaStore files). */
+    onRenamed: (old: Uri, new: Uri, newName: String) -> Unit = { _, _, _ -> },
+    content: @Composable () -> Unit,
+) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val actions = remember { FileActions() }
@@ -102,12 +125,20 @@ fun FileActionsHost(onChanged: () -> Unit, content: @Composable () -> Unit) {
         }
     }
 
-    fun execute(target: FileTarget, success: String, op: (consented: Boolean) -> FileResult) {
+    actions.lookup = lookup
+
+    fun execute(
+        target: FileTarget,
+        success: String,
+        onDone: (FileResult.Done) -> Unit = {},
+        op: (consented: Boolean) -> FileResult,
+    ) {
         fun attempt(consented: Boolean) {
             scope.launch {
                 when (val result = withContext(Dispatchers.IO) { op(consented) }) {
-                    FileResult.Done -> {
+                    is FileResult.Done -> {
                         Toast.makeText(context, success, Toast.LENGTH_SHORT).show()
+                        onDone(result)
                         onChanged()
                     }
                     is FileResult.NeedsConsent -> {
@@ -129,7 +160,7 @@ fun FileActionsHost(onChanged: () -> Unit, content: @Composable () -> Unit) {
         }
     }
 
-    fun runDelete(target: FileTarget) = execute(target, "Deleted") { consented ->
+    fun runDelete(target: FileTarget) = execute(target, "Deleted", onDone = { onDeleted(target.uri) }) { consented ->
         FileOperations.delete(context, target.uri, target.filePath, consented)
     }
 
@@ -146,7 +177,7 @@ fun FileActionsHost(onChanged: () -> Unit, content: @Composable () -> Unit) {
             onDismiss = { actions.renaming = null },
             onRename = { newName ->
                 actions.renaming = null
-                execute(target, "Renamed") { consented ->
+                execute(target, "Renamed", onDone = { done -> onRenamed(target.uri, done.newUri ?: target.uri, newName) }) { consented ->
                     FileOperations.rename(context, target.uri, newName, target.filePath, consented)
                 }
             },

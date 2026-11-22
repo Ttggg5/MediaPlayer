@@ -14,7 +14,8 @@ import java.io.File
 
 /** Outcome of a rename or delete. */
 sealed interface FileResult {
-    data object Done : FileResult
+    /** [newUri] is set when a rename gave the file a new URI (files in chosen folders). */
+    class Done(val newUri: Uri? = null) : FileResult
 
     /** The system must ask the user first; run the operation again with consent once they allow it. */
     class NeedsConsent(val intentSender: IntentSender) : FileResult
@@ -64,8 +65,9 @@ object FileOperations {
         val resolver = context.contentResolver
         if (isDocument(context, uri)) {
             return try {
-                if (DocumentsContract.renameDocument(resolver, uri, newName) != null) {
-                    FileResult.Done
+                val renamed = DocumentsContract.renameDocument(resolver, uri, newName)
+                if (renamed != null) {
+                    FileResult.Done(renamed.takeIf { it != uri })
                 } else {
                     FileResult.Failed("Couldn't rename this file")
                 }
@@ -79,7 +81,7 @@ object FileOperations {
         return try {
             val values = ContentValues().apply { put(MediaStore.MediaColumns.DISPLAY_NAME, newName) }
             if (resolver.update(uri, values, null, null) > 0) {
-                FileResult.Done
+                FileResult.Done()
             } else {
                 FileResult.Failed("Couldn't rename this file")
             }
@@ -95,7 +97,7 @@ object FileOperations {
         if (isDocument(context, uri)) {
             return try {
                 if (DocumentsContract.deleteDocument(resolver, uri)) {
-                    FileResult.Done
+                    FileResult.Done()
                 } else {
                     FileResult.Failed("Couldn't delete this file")
                 }
@@ -108,14 +110,14 @@ object FileOperations {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             // The system's delete sheet removes the file itself once the user allows it.
             return if (consented) {
-                FileResult.Done
+                FileResult.Done()
             } else {
                 FileResult.NeedsConsent(MediaStore.createDeleteRequest(resolver, listOf(uri)).intentSender)
             }
         }
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return deleteLegacy(context, uri, filePath)
         return try {
-            if (resolver.delete(uri, null, null) > 0) FileResult.Done else FileResult.Failed("Couldn't delete this file")
+            if (resolver.delete(uri, null, null) > 0) FileResult.Done() else FileResult.Failed("Couldn't delete this file")
         } catch (e: SecurityException) {
             consent(context, uri, e, consented, write = false)
         } catch (e: Exception) {
@@ -146,7 +148,7 @@ object FileOperations {
         if (target.exists()) return FileResult.Failed("A file with that name already exists")
         if (!file.renameTo(target)) return FileResult.Failed("Couldn't rename this file")
         MediaScannerConnection.scanFile(context, arrayOf(file.path, target.path), null, null)
-        return FileResult.Done
+        return FileResult.Done()
     }
 
     private fun deleteLegacy(context: Context, uri: Uri, filePath: String): FileResult {
@@ -154,6 +156,6 @@ object FileOperations {
         if (filePath.isNotBlank() && file.exists() && !file.delete()) return FileResult.Failed("Couldn't delete this file")
         runCatching { context.contentResolver.delete(uri, null, null) }
         if (filePath.isNotBlank()) MediaScannerConnection.scanFile(context, arrayOf(file.path), null, null)
-        return FileResult.Done
+        return FileResult.Done()
     }
 }

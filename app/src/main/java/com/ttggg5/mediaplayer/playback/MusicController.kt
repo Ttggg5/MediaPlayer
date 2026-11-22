@@ -126,6 +126,33 @@ class MusicController(context: Context) {
     fun seekTo(positionMs: Long) = withController { it.seekTo(positionMs) }
     fun skipToQueueIndex(index: Int) = withController { it.seekToDefaultPosition(index); it.play() }
     fun removeFromQueue(index: Int) = withController { it.removeMediaItem(index) }
+
+    /** A file was deleted: drop it from the queue so nothing tries to play it. */
+    fun fileDeleted(uri: Uri) = withController { c ->
+        for (i in c.mediaItemCount - 1 downTo 0) {
+            if (c.getMediaItemAt(i).playbackUri() == uri) c.removeMediaItem(i)
+        }
+    }
+
+    /**
+     * A renamed file got a new URI (files in chosen folders): point queued items at it. The item
+     * that is playing keeps its open stream and is left alone.
+     */
+    fun fileRenamed(old: Uri, new: Uri, @Suppress("UNUSED_PARAMETER") newName: String = "") = withController { c ->
+        if (old == new) return@withController
+        for (i in 0 until c.mediaItemCount) {
+            if (i == c.currentMediaItemIndex) continue
+            val item = c.getMediaItemAt(i)
+            if (item.playbackUri() != old) continue
+            c.replaceMediaItem(
+                i,
+                item.buildUpon()
+                    .setUri(new)
+                    .setRequestMetadata(item.requestMetadata.buildUpon().setMediaUri(new).build())
+                    .build(),
+            )
+        }
+    }
     fun moveInQueue(from: Int, to: Int) = withController { it.moveMediaItem(from, to) }
     fun toggleShuffle() = withController { it.shuffleModeEnabled = !it.shuffleModeEnabled }
 
@@ -180,3 +207,6 @@ fun AudioTrack.toMediaItem(): MediaItem =
                 .build(),
         )
         .build()
+
+/** The URI an item plays, also after the MediaController dropped its local configuration. */
+fun MediaItem.playbackUri(): Uri? = requestMetadata.mediaUri ?: localConfiguration?.uri

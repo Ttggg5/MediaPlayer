@@ -2,6 +2,12 @@
 
 package com.ttggg5.mediaplayer.ui.nowplaying
 
+import com.ttggg5.mediaplayer.playback.playbackUri
+import com.ttggg5.mediaplayer.ui.components.MenuAction
+import com.ttggg5.mediaplayer.ui.components.LocalFileActions
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material.icons.rounded.MoreVert
 import com.ttggg5.mediaplayer.playback.MAX_VOLUME
 import androidx.compose.material.icons.automirrored.rounded.VolumeOff
 import androidx.compose.material.icons.automirrored.rounded.VolumeUp
@@ -320,6 +326,12 @@ fun NowPlayingScreen(
                             textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                         )
                         IconButton(onClick = { showQueue = true }) { Icon(Icons.AutoMirrored.Rounded.QueueMusic, "Queue") }
+                        // Rename / delete the song that is playing.
+                        val fileActions = LocalFileActions.current
+                        val target = fileActions?.targetFor(state.currentItem?.playbackUri(), state.title)
+                        if (fileActions != null && target != null) {
+                            OverflowMenu(fileActions.menuFor(target))
+                        }
                     }
                     if (twoPane) {
                         Row(
@@ -384,7 +396,14 @@ private fun QueueSheet(state: MusicState, music: MusicController, onDismiss: () 
                             ) {
                                 Icon(Icons.Rounded.KeyboardArrowDown, "Move down")
                             }
-                            IconButton(onClick = { music.removeFromQueue(index) }) { Icon(Icons.Rounded.Close, "Remove") }
+                            val fileActions = LocalFileActions.current
+                            val target = fileActions?.targetFor(item.playbackUri(), item.mediaMetadata.title?.toString().orEmpty())
+                            OverflowMenu(
+                                buildList {
+                                    add(MenuAction("Remove from queue", Icons.Rounded.Close) { music.removeFromQueue(index) })
+                                    if (fileActions != null && target != null) addAll(fileActions.menuFor(target))
+                                },
+                            )
                         }
                     },
                 )
@@ -419,5 +438,26 @@ private fun MusicVolume(state: MusicState, music: MusicController) {
             color = tint,
             modifier = Modifier.width(44.dp),
         )
+    }
+}
+
+/** ⋮ button with a dropdown of [actions]. */
+@Composable
+private fun OverflowMenu(actions: List<MenuAction>) {
+    var open by remember { mutableStateOf(false) }
+    Box {
+        IconButton(onClick = { open = true }) { Icon(Icons.Rounded.MoreVert, "More options") }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            actions.forEach { action ->
+                DropdownMenuItem(
+                    text = { Text(action.label) },
+                    leadingIcon = { Icon(action.icon, null) },
+                    onClick = {
+                        open = false
+                        action.onClick()
+                    },
+                )
+            }
+        }
     }
 }

@@ -1,5 +1,6 @@
 package com.ttggg5.mediaplayer.ui.video
 
+import com.ttggg5.mediaplayer.ui.components.LocalFileActions
 import kotlin.math.roundToInt
 import com.ttggg5.mediaplayer.playback.MAX_VOLUME
 import com.ttggg5.mediaplayer.ui.components.LocalGestureSettings
@@ -527,6 +528,14 @@ fun VideoPlayerScreen(
                                 if (!split) {
                                     MenuRow(Icons.Rounded.ScreenRotation, "Rotate screen") {
                                         menuOpen = false; host.toggleOrientation()
+                                    }
+                                }
+                                // Rename / delete the video that is playing.
+                                val fileActions = LocalFileActions.current
+                                val target = fileActions?.targetFor(player.currentMediaItem?.localConfiguration?.uri, title)
+                                if (fileActions != null && target != null) {
+                                    fileActions.menuFor(target).forEach { action ->
+                                        MenuRow(action.icon, action.label) { menuOpen = false; action.onClick() }
                                     }
                                 }
                             }

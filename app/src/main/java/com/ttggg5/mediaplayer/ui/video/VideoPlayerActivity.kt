@@ -1,5 +1,7 @@
 package com.ttggg5.mediaplayer.ui.video
 
+import com.ttggg5.mediaplayer.ui.components.fileTarget
+import com.ttggg5.mediaplayer.ui.components.FileActionsHost
 import androidx.media3.common.util.UnstableApi
 import androidx.annotation.OptIn
 import com.ttggg5.mediaplayer.playback.MAX_VOLUME
@@ -137,6 +139,12 @@ class VideoPlayerActivity : ComponentActivity(), VideoPlayerHost {
             SideEffect { currentSplitLayoutState.value = splitLayout }
             val gestures by settings.gestures.collectAsStateWithLifecycle(initialValue = GestureSettings())
             MediaPlayerTheme(darkTheme = true, dynamicColor = appSettings.dynamicColor) {
+              FileActionsHost(
+                  onChanged = container.mediaRepository::refresh,
+                  lookup = container.mediaRepository::fileTarget,
+                  onDeleted = ::fileDeleted,
+                  onRenamed = ::fileRenamed,
+              ) {
               CompositionLocalProvider(LocalGestureSettings provides gestures) {
                 val split = splitMode.value && !inPictureInPicture.value
                 SplitPlayerLayout(
@@ -156,6 +164,39 @@ class VideoPlayerActivity : ComponentActivity(), VideoPlayerHost {
                     other = { modifier -> MusicPane(container, player, videoBoost, modifier) },
                 )
               }
+              }
+            }
+        }
+    }
+
+    /** A file was deleted from the player: drop it from both queues; close when no video is left. */
+    private fun fileDeleted(uri: Uri) {
+        container.musicController.fileDeleted(uri)
+        for (i in player.mediaItemCount - 1 downTo 0) {
+            if (player.getMediaItemAt(i).localConfiguration?.uri == uri) player.removeMediaItem(i)
+        }
+        if (player.mediaItemCount == 0) finish()
+    }
+
+    /** A file was renamed: show the new name, and follow a changed URI without losing the position. */
+    private fun fileRenamed(old: Uri, new: Uri, newName: String) {
+        container.musicController.fileRenamed(old, new, newName)
+        val title = newName.substringBeforeLast('.').ifBlank { newName }
+        for (i in 0 until player.mediaItemCount) {
+            val item = player.getMediaItemAt(i)
+            if (item.localConfiguration?.uri != old) continue
+            val replacement = item.buildUpon()
+                .setUri(new)
+                .setMediaMetadata(item.mediaMetadata.buildUpon().setTitle(title).build())
+                .build()
+            if (i == player.currentMediaItemIndex && old != new) {
+                val position = player.currentPosition
+                val playing = player.playWhenReady
+                player.replaceMediaItem(i, replacement)
+                player.seekTo(i, position)
+                player.playWhenReady = playing
+            } else {
+                player.replaceMediaItem(i, replacement)
             }
         }
     }
