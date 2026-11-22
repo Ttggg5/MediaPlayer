@@ -2,6 +2,7 @@
 
 package com.ttggg5.mediaplayer.ui.settings
 
+import androidx.compose.material.icons.rounded.VisibilityOff
 import com.ttggg5.mediaplayer.data.settings.GestureSettings
 import com.ttggg5.mediaplayer.data.settings.Gesture
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -95,6 +96,7 @@ fun SettingsScreen(container: AppContainer, onBack: () -> Unit) {
     val musicFolders by settings.musicFolders.collectAsStateWithLifecycle(initialValue = emptySet())
     val splitLayout by settings.splitLayout.collectAsStateWithLifecycle(initialValue = SplitLayout.AUTO)
     val videoFolders by settings.videoFolders.collectAsStateWithLifecycle(initialValue = emptySet())
+    val hiddenFolders by settings.hiddenFolders.collectAsStateWithLifecycle(initialValue = emptySet())
     val media = container.mediaRepository
     val allSongs by media.allSongs.collectAsStateWithLifecycle()
     val allVideos by media.allVideos.collectAsStateWithLifecycle()
@@ -139,6 +141,15 @@ fun SettingsScreen(container: AppContainer, onBack: () -> Unit) {
                 ClickRow(Icons.Rounded.VideoLibrary, "Video folders", folderSummary(videoFolders, media::folderKey)) {
                     picker = "videoFolders"
                 }
+                ClickRow(
+                    Icons.Rounded.VisibilityOff,
+                    "Hidden folders",
+                    when (hiddenFolders.size) {
+                        0 -> "None"
+                        1 -> folderLabel(hiddenFolders.first())
+                        else -> "${hiddenFolders.size} folders"
+                    },
+                ) { picker = "hidden" }
                 SwitchRow(
                     Icons.Rounded.MusicOff,
                     "Hide short audio",
@@ -195,6 +206,17 @@ fun SettingsScreen(container: AppContainer, onBack: () -> Unit) {
             selected = splitLayout,
             onDismiss = { picker = null },
         ) { scope.launch { settings.setSplitLayout(it) } }
+        "hidden" -> HiddenFoldersDialog(
+            hidden = hiddenFolders,
+            countFor = { key ->
+                val folder = setOf(key)
+                allSongs.count { media.inFolders(it.location, it.filePath, folder) } +
+                    allVideos.count { media.inFolders(it.location, it.filePath, folder) }
+            },
+            onHide = { scope.launch { settings.hideFolder(it) } },
+            onUnhide = { scope.launch { settings.unhideFolder(it) } },
+            onDismiss = { picker = null },
+        )
         "musicFolders", "videoFolders" -> {
             val video = picker == "videoFolders"
             FolderDialog(

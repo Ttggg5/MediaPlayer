@@ -2,6 +2,8 @@
 
 package com.ttggg5.mediaplayer.ui.music
 
+import com.ttggg5.mediaplayer.ui.components.hideFolderMenu
+import com.ttggg5.mediaplayer.ui.components.rememberHideFolder
 import androidx.compose.foundation.layout.Column
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Album
@@ -206,6 +208,7 @@ private fun FoldersTab(
         EmptyState(Icons.Rounded.Folder, "No folders", "Folders containing music appear here.")
         return
     }
+    val hideFolder = rememberHideFolder(vm::hideFolder)
     Column {
         FolderModeChips(tree) { vm.setFolderTree(video = false, it) }
         if (tree) {
@@ -223,15 +226,21 @@ private fun FoldersTab(
                 },
                 onPlayAll = { music.playTracks(it) },
                 onShuffle = { music.playTracks(it, shuffle = true) },
+                onHide = hideFolder,
             )
         } else {
-            FlatFolders(folders, mode, onOpen)
+            FlatFolders(folders, mode, onOpen, hideFolder)
         }
     }
 }
 
 @Composable
-private fun FlatFolders(folders: List<com.ttggg5.mediaplayer.data.media.Folder>, mode: ViewMode, onOpen: (String) -> Unit) {
+private fun FlatFolders(
+    folders: List<com.ttggg5.mediaplayer.data.media.Folder>,
+    mode: ViewMode,
+    onOpen: (String) -> Unit,
+    onHide: (String) -> Unit,
+) {
     MediaCollection(
         items = folders.map { folder ->
             MediaItemUi(
@@ -241,6 +250,7 @@ private fun FlatFolders(folders: List<com.ttggg5.mediaplayer.data.media.Folder>,
                 artwork = null,
                 shape = ThumbShape.SQUARE,
                 placeholder = Icons.Rounded.Folder,
+                menu = hideFolderMenu(folder.tracks.firstOrNull()?.location, onHide),
                 onClick = { onOpen(folder.path) },
             )
         },

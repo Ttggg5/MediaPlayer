@@ -51,16 +51,24 @@ class MediaRepository(private val context: Context, private val settings: Settin
         combine(_videos, _scannedVideos) { indexed, scanned -> mergeVideos(indexed, scanned) }
             .stateIn(scope, SharingStarted.Eagerly, emptyList())
 
-    /** Songs inside the user's chosen music folders (all MediaStore songs when none are chosen). */
+    /**
+     * Songs inside the user's chosen music folders (all MediaStore songs when none are chosen),
+     * minus hidden folders.
+     */
     val songs: StateFlow<List<AudioTrack>> =
-        combine(_songs, allSongs, settings.musicFolders) { indexed, all, entries ->
-            if (entries.isEmpty()) indexed else keysOf(entries).let { keys -> all.filter { inFolders(it.location, it.filePath, keys) } }
+        combine(_songs, allSongs, settings.musicFolders, settings.hiddenFolders) { indexed, all, entries, hidden ->
+            val chosen = if (entries.isEmpty()) indexed else keysOf(entries).let { keys -> all.filter { inFolders(it.location, it.filePath, keys) } }
+            if (hidden.isEmpty()) chosen else chosen.filterNot { inFolders(it.location, it.filePath, hidden) }
         }.stateIn(scope, SharingStarted.Eagerly, emptyList())
 
-    /** Videos inside the user's chosen video folders (all MediaStore videos when none are chosen). */
+    /**
+     * Videos inside the user's chosen video folders (all MediaStore videos when none are chosen),
+     * minus hidden folders.
+     */
     val videos: StateFlow<List<VideoItem>> =
-        combine(_videos, allVideos, settings.videoFolders) { indexed, all, entries ->
-            if (entries.isEmpty()) indexed else keysOf(entries).let { keys -> all.filter { inFolders(it.location, it.filePath, keys) } }
+        combine(_videos, allVideos, settings.videoFolders, settings.hiddenFolders) { indexed, all, entries, hidden ->
+            val chosen = if (entries.isEmpty()) indexed else keysOf(entries).let { keys -> all.filter { inFolders(it.location, it.filePath, keys) } }
+            if (hidden.isEmpty()) chosen else chosen.filterNot { inFolders(it.location, it.filePath, hidden) }
         }.stateIn(scope, SharingStarted.Eagerly, emptyList())
 
     private var musicTrees: Set<Uri> = emptySet()

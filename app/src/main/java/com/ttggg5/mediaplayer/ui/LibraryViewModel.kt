@@ -102,6 +102,11 @@ class LibraryViewModel(private val container: AppContainer) : ViewModel() {
         viewModelScope.launch { settings.setFolderTree(video, enabled) }
     }
 
+    /** Hides a folder (and its subfolders) from both libraries. */
+    fun hideFolder(key: String) {
+        viewModelScope.launch { settings.hideFolder(key) }
+    }
+
     fun setViewMode(video: Boolean, mode: ViewMode) {
         viewModelScope.launch { settings.setViewMode(video, mode) }
     }

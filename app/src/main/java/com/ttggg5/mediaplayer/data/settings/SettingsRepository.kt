@@ -164,6 +164,17 @@ class SettingsRepository(private val context: Context) {
         it[pref] = it[pref].orEmpty() - key
     }
 
+    /** Folder keys hidden from both libraries (subfolders included). */
+    val hiddenFolders: Flow<Set<String>> = context.dataStore.data.map { it[HIDDEN_FOLDERS].orEmpty() }
+
+    suspend fun hideFolder(key: String) = context.dataStore.edit {
+        it[HIDDEN_FOLDERS] = it[HIDDEN_FOLDERS].orEmpty() + key
+    }
+
+    suspend fun unhideFolder(key: String) = context.dataStore.edit {
+        it[HIDDEN_FOLDERS] = it[HIDDEN_FOLDERS].orEmpty() - key
+    }
+
     /** Saved resume position for a video, or 0 if none. */
     suspend fun videoPosition(uri: String): Long =
         context.dataStore.data.first()[positionKey(uri)] ?: 0L
@@ -219,5 +230,6 @@ class SettingsRepository(private val context: Context) {
         val SPLIT_LAYOUT = stringPreferencesKey("split_layout")
         val VIDEO_TREE = booleanPreferencesKey("video_folder_tree")
         val VIDEO_FOLDERS = stringSetPreferencesKey("video_folders")
+        val HIDDEN_FOLDERS = stringSetPreferencesKey("hidden_folders")
     }
 }

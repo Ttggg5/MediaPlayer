@@ -1,5 +1,6 @@
 package com.ttggg5.mediaplayer.ui.components
 
+import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -69,6 +70,8 @@ fun <T> FolderBrowser(
     toItem: (item: T, index: Int, folderItems: List<T>) -> MediaItemUi,
     onPlayAll: (List<T>) -> Unit,
     onShuffle: (List<T>) -> Unit,
+    /** Hides a folder (by key) from the library; storage roots can't be hidden. */
+    onHide: ((String) -> Unit)? = null,
 ) {
     var current by rememberSaveable { mutableStateOf<String?>(null) }
     val locations = remember(items) { items.map(location) }
@@ -93,6 +96,11 @@ fun <T> FolderBrowser(
                 current != null -> Icons.Rounded.Folder
                 folder.key == "primary:" -> Icons.Rounded.Smartphone
                 else -> Icons.Rounded.SdStorage
+            },
+            menu = if (onHide != null && current != null) {
+                listOf(MenuAction("Hide folder", Icons.Rounded.VisibilityOff) { onHide(folder.key) })
+            } else {
+                emptyList()
             },
             onClick = { current = folder.key },
         )

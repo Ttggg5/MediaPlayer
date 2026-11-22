@@ -2,6 +2,8 @@
 
 package com.ttggg5.mediaplayer.ui.video
 
+import com.ttggg5.mediaplayer.ui.components.hideFolderMenu
+import com.ttggg5.mediaplayer.ui.components.rememberHideFolder
 import android.content.Context
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -66,6 +68,7 @@ fun VideosScreen(vm: LibraryViewModel, onOpenFolder: (String) -> Unit, onOpenSet
     var tab by rememberSaveable { mutableIntStateOf(0) }
     var showOptions by remember { mutableStateOf(false) }
     val files = LocalFileActions.current
+    val hideFolder = rememberHideFolder(vm::hideFolder)
 
     LibraryPage(
         title = "Videos",
@@ -100,6 +103,7 @@ fun VideosScreen(vm: LibraryViewModel, onOpenFolder: (String) -> Unit, onOpenSet
                         },
                         onPlayAll = { playVideos(context, it, 0) },
                         onShuffle = { playVideos(context, it, 0, shuffle = true) },
+                        onHide = hideFolder,
                     )
                 } else {
                     MediaCollection(
@@ -111,6 +115,7 @@ fun VideosScreen(vm: LibraryViewModel, onOpenFolder: (String) -> Unit, onOpenSet
                                 artwork = folder.videos.first().uri,
                                 shape = ThumbShape.WIDE,
                                 placeholder = Icons.Rounded.Folder,
+                                menu = hideFolderMenu(folder.videos.firstOrNull()?.location, hideFolder),
                                 onClick = { onOpenFolder(folder.path) },
                             )
                         },
