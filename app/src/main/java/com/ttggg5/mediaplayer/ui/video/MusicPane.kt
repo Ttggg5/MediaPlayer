@@ -2,6 +2,10 @@
 
 package com.ttggg5.mediaplayer.ui.video
 
+import com.ttggg5.mediaplayer.playback.playbackUri
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material.icons.rounded.MoreVert
 import com.ttggg5.mediaplayer.data.media.AudioTrack
 import com.ttggg5.mediaplayer.ui.components.fileTarget
 import com.ttggg5.mediaplayer.ui.components.LocalFileActions
@@ -200,6 +204,27 @@ private fun NowPlayingCard(state: MusicState, music: MusicController, mixerOpen:
             }
             FilledTonalIconToggleButton(checked = mixerOpen, onCheckedChange = { onToggleMixer() }) {
                 Icon(Icons.Rounded.Tune, "Volume mix")
+            }
+            // Rename / delete the song that is playing.
+            val fileActions = LocalFileActions.current
+            val target = fileActions?.targetFor(state.currentItem?.playbackUri(), state.title)
+            if (fileActions != null && target != null) {
+                var menuOpen by remember { mutableStateOf(false) }
+                Box {
+                    IconButton(onClick = { menuOpen = true }) { Icon(Icons.Rounded.MoreVert, "More options") }
+                    DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                        fileActions.menuFor(target).forEach { action ->
+                            DropdownMenuItem(
+                                text = { Text(action.label) },
+                                leadingIcon = { Icon(action.icon, null) },
+                                onClick = {
+                                    menuOpen = false
+                                    action.onClick()
+                                },
+                            )
+                        }
+                    }
+                }
             }
         }
         if (state.currentItem != null) {
